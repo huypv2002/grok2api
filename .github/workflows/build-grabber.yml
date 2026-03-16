@@ -103,13 +103,6 @@ jobs:
           $sizeMB = [math]::Round($size / 1MB, 2)
           echo "ZIP size: ${sizeMB} MB"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: GrokStudioGrabber-windows
-          path: GrokStudioGrabber-windows.zip
-          retention-days: 30
-
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/grabber-v')
         uses: softprops/action-gh-release@v1
