@@ -1,0 +1,121 @@
+name: Build Grok Studio Grabber
+
+on:
+  push:
+    branches: [main]
+    paths: ['grok-studio/tools/**']
+    tags: ['grabber-v*']
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: pip-grabber-py313-${{ hashFiles('grok-studio/tools/requirements.txt') }}
+          restore-keys: pip-grabber-py313-
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip wheel setuptools
+          pip install -r grok-studio/tools/requirements.txt
+          pip install nuitka ordered-set zstandard
+
+      - name: Prepare package data path
+        id: pkg_paths
+        run: |
+          $curl_raw = (python -c "import curl_cffi, os; print(os.path.dirname(curl_cffi.__file__))").Trim()
+          $curl_dir = $curl_raw -replace '\\', '/'
+          echo "CURL_CFFI_DIR=$curl_dir" >> $env:GITHUB_OUTPUT
+          $cpu = $env:NUMBER_OF_PROCESSORS
+          if (-not $cpu) { $cpu = "4" }
+          echo "CPU_COUNT=$cpu" >> $env:GITHUB_OUTPUT
+
+      - name: Build with Nuitka (standalone)
+        run: |
+          $curl_cffi_dir = "${{ steps.pkg_paths.outputs.CURL_CFFI_DIR }}"
+          $cpu = "${{ steps.pkg_paths.outputs.CPU_COUNT }}"
+          echo "Building standalone with $cpu jobs..."
+          python -m nuitka `
+            --standalone `
+            --windows-console-mode=disable `
+            --output-filename=GrokStudioGrabber.exe `
+            --enable-plugin=pyside6 `
+            --jobs=$cpu `
+            --lto=no `
+            --include-package=websockets `
+            --include-package=curl_cffi `
+            --include-module=_cffi_backend `
+            --include-package-data=PySide6 `
+            --include-package-data=certifi `
+            --include-package-data=curl_cffi `
+            --include-data-dir="$curl_cffi_dir=curl_cffi" `
+            --nofollow-import-to=tkinter `
+            --nofollow-import-to=_tkinter `
+            --nofollow-import-to=PyQt6 `
+            --nofollow-import-to=PyQt5 `
+            --nofollow-import-to=PySide2 `
+            --nofollow-import-to=matplotlib `
+            --nofollow-import-to=numpy `
+            --nofollow-import-to=test `
+            --nofollow-import-to=unittest `
+            --no-pyi-file `
+            --assume-yes-for-downloads `
+            grok-studio/tools/grok_studio_app.py
+
+      - name: Create data folders
+        run: |
+          $dist = "grok_studio_app.dist"
+          New-Item -ItemType Directory -Force -Path "$dist\data"
+          New-Item -ItemType Directory -Force -Path "$dist\data\profiles"
+          echo "Data folders created"
+
+      - name: Verify build output
+        run: |
+          $exe = "grok_studio_app.dist\GrokStudioGrabber.exe"
+          if (Test-Path $exe) {
+            $size = (Get-Item $exe).Length
+            $sizeMB = [math]::Round($size / 1MB, 2)
+            echo "Build OK! EXE size: ${sizeMB} MB"
+          } else {
+            echo "ERROR: EXE not found!"
+            exit 1
+          }
+
+      - name: Package as ZIP
+        run: |
+          Rename-Item "grok_studio_app.dist" "GrokStudioGrabber"
+          Compress-Archive -Path "GrokStudioGrabber" -DestinationPath "GrokStudioGrabber-windows.zip" -Force
+          $size = (Get-Item "GrokStudioGrabber-windows.zip").Length
+          $sizeMB = [math]::Round($size / 1MB, 2)
+          echo "ZIP size: ${sizeMB} MB"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrokStudioGrabber-windows
+          path: GrokStudioGrabber-windows.zip
+          retention-days: 30
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/grabber-v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: GrokStudioGrabber-windows.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -56,6 +56,10 @@ htmlcov/
 # Project specific
 config.local.toml
 .ace-tool/
-grok-studio/
 node_modules/
 .wrangler/
+
+# Grok Studio tool data
+grok-studio/tools/data/
+grok-studio/tools/accounts.txt
+cookies_output.json

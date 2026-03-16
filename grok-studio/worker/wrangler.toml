@@ -1,0 +1,23 @@
+name = "grok-studio"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+routes = [
+  { pattern = "grok.liveyt.pro", custom_domain = true }
+]
+
+[vars]
+JWT_SECRET = "gkS!9xR#mP2vL@7nQ4wZ8jY0bT5cF3hA"
+GROK_API_BASE = "https://api.liveyt.pro"
+INTERNAL_KEY = "cf-sync-k8X#pQ2mR7vL@9nZ"
+WEB2M_TOKEN = "307ed7577fbe3a9acbb459dbfb0ee4822735ccf5e0c9afef09991848aa12a64e"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "grok-studio-db"
+database_id = "d49b933b-c96d-4979-a06a-7b867dd725ee"
+
+[assets]
+directory = "../frontend"
+binding = "ASSETS"
+not_found_handling = "none"
