@@ -165,6 +165,7 @@ function loadBatchState(page){
 }
 let hViewMode=localStorage.getItem('gs_hview')||'grid'; // 'grid' or 'list'
 let bViewMode=localStorage.getItem('gs_bview')||'grid'; // 'grid' or 'table' for batch completed tab
+let accViewMode=localStorage.getItem('gs_accview')||'table'; // 'grid' (cards) or 'table'
 
 function toast(m,t='info'){const e=document.getElementById('toast');e.textContent=m;e.className='toast '+t+' show';setTimeout(()=>e.classList.remove('show'),3e3)}
 function toggleAuth(reg){document.getElementById('login-form').classList.toggle('hidden',reg);document.getElementById('register-form').classList.toggle('hidden',!reg);document.getElementById('auth-error').textContent=''}
@@ -337,7 +338,7 @@ function renderPage(p){
 }
 function renderExtend(){return `<div class="page-title">Extend Video</div><div class="page-sub">Nối dài video</div><div class="gen-layout"><div class="gen-left glass-card gen-form"><div class="fg"><label>Reference ID</label><input id="g-ref" placeholder="Video reference ID"></div><div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả tiếp theo..."></textarea></div><div class="fg-row"><div class="fg"><label>Start (s)</label><input type="number" id="g-st" value="0" min="0" step="0.1"></div><div class="fg"><label>Thời lượng</label><select id="g-len">${LOPTS}</select></div></div><div class="fg-row"><div class="fg"><label>Tỷ lệ</label><select id="g-ar">${VOPTS}</select></div><div class="fg"><label>Phân giải</label><select id="g-res">${ROPTS}</select></div></div><button class="btn-primary" id="gbtn" onclick="gen('extend_video')">Extend</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`}
 function renderHistory(){return `<div class="page-title">Lịch sử</div><div class="page-sub">Các lần tạo của bạn</div><div id="hstats" style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap"></div><div class="filters" id="hfilters"><button class="fbtn on" onclick="hFilter(null,this)">Tất cả</button><button class="fbtn" onclick="hFilter('text2video',this)">T→V</button><button class="fbtn" onclick="hFilter('image2video',this)">I→V</button><button class="fbtn" onclick="hFilter('text2image',this)">T→I</button><button class="fbtn" onclick="hFilter('image2image',this)">I→I</button><button class="fbtn" onclick="hFilter('extend_video',this)">Ext</button><button class="fbtn" onclick="hFilter('__fav',this)">★ Yêu thích</button><span style="flex:1"></span><button class="btn-s" id="hview-btn" onclick="toggleHView()" title="Đổi kiểu xem">${hViewMode==='grid'?'☰ List':'▦ Grid'}</button><button class="btn-s" id="hsel-btn" onclick="toggleSelectMode()">☐ Chọn</button></div><div class="hfilter-row" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center"><select id="hstatus" onchange="hStatusFilter(this.value)" style="width:auto;padding:6px 10px;font-size:11px"><option value="">Tất cả status</option><option value="completed">✓ Completed</option><option value="failed">✕ Failed</option><option value="processing">⏳ Processing</option></select><input type="date" id="hdate-from" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Từ ngày"><input type="date" id="hdate-to" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Đến ngày"><button class="btn-s" onclick="clearDateFilter()" style="font-size:11px;padding:6px 10px" title="Xóa bộ lọc ngày">✕ Xóa lọc</button></div><div id="hbulk" style="display:none;margin-bottom:12px;gap:8px;flex-wrap:wrap;align-items:center"></div><div class="${hViewMode==='grid'?'hist-grid':'hist-list'}" id="hgrid"></div><div id="lightbox"></div>`}
-function renderAccounts(){return `<div class="page-title">Cài đặt Token</div><div class="page-sub">Quản lý cookie/token Grok. Dán cookie JSON hoặc SSO token. Video cần cf_clearance.</div><div class="glass-card" id="cf-diag" style="padding:14px 18px;margin-bottom:16px;font-size:12px;color:var(--text2);line-height:1.6"><span class="spin"></span> Đang kiểm tra...</div><div id="acc-limit-info"></div><div class="acc-add"><textarea id="ntok" placeholder='Dán cookie JSON (hỗ trợ nhiều token, mỗi JSON array 1 dòng)&#10;Ví dụ:&#10;[{"name":"sso","value":"xxx",...}]&#10;[{"name":"sso","value":"yyy",...}]' style="min-height:100px;font-size:11px;font-family:monospace"></textarea><div style="display:flex;gap:8px"><input id="nlbl" placeholder="Nhãn (tùy chọn)" style="max-width:160px"><button class="btn-primary" onclick="addAcc()" style="width:auto;padding:11px 20px">Thêm</button></div><div style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.5">💡 Hỗ trợ thêm nhiều token cùng lúc: mỗi cookie JSON array trên 1 dòng, hoặc mỗi SSO token trên 1 dòng.</div></div><div id="acc-bulk-bar" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:10px;gap:8px;flex-wrap:wrap;align-items:center"></div><div class="acc-list" id="alist"></div><div id="acc-modal"></div>`}
+function renderAccounts(){return `<div class="page-title">Cài đặt Token</div><div class="page-sub">Quản lý cookie/token Grok. Dán cookie JSON hoặc SSO token. Video cần cf_clearance.</div><div class="glass-card" id="cf-diag" style="padding:14px 18px;margin-bottom:16px;font-size:12px;color:var(--text2);line-height:1.6"><span class="spin"></span> Đang kiểm tra...</div><div id="acc-limit-info"></div><div class="acc-add"><textarea id="ntok" placeholder='Dán cookie JSON (hỗ trợ nhiều token, mỗi JSON array 1 dòng)&#10;Ví dụ:&#10;[{"name":"sso","value":"xxx",...}]&#10;[{"name":"sso","value":"yyy",...}]' style="min-height:100px;font-size:11px;font-family:monospace"></textarea><div style="display:flex;gap:8px"><input id="nlbl" placeholder="Nhãn (tùy chọn)" style="max-width:160px"><button class="btn-primary" onclick="addAcc()" style="width:auto;padding:11px 20px">Thêm</button></div><div style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.5">💡 Hỗ trợ thêm nhiều token cùng lúc: mỗi cookie JSON array trên 1 dòng, hoặc mỗi SSO token trên 1 dòng.</div></div><div id="acc-bulk-bar" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:10px;gap:8px;flex-wrap:wrap;align-items:center"></div><div id="alist"></div><div id="acc-modal"></div>`}
 
 function afterRender(p){
   if(p==='history')loadHist();
@@ -1313,7 +1314,7 @@ function accSelectAll(){_accList.forEach(a=>_accSel.add(a.id));_updateAccBulkBar
 function accSelectByStatus(s){_accList.filter(a=>a.status===s).forEach(a=>_accSel.add(a.id));_updateAccBulkBar();_accList.forEach(a=>{const cb=document.getElementById('acb-'+a.id);if(cb)cb.checked=_accSel.has(a.id)})}
 function accCancelSel(){_accSel.clear();_accSelectMode=false;_updateAccBulkBar();document.querySelectorAll('.acc-cb').forEach(cb=>{cb.checked=false;cb.style.display='none'})}
 async function accBulkDel(){if(!_accSel.size)return;if(!confirm(`Xóa ${_accSel.size} token?`))return;try{await API.bulkDelAccounts([..._accSel]);toast(`Đã xóa ${_accSel.size} token`,'ok');_accSel.clear();_accSelectMode=false;loadAcc()}catch(e){toast(e.message,'err')}}
-function accToggleSelectMode(){_accSelectMode=!_accSelectMode;if(!_accSelectMode){_accSel.clear();_updateAccBulkBar()}document.querySelectorAll('.acc-cb').forEach(cb=>cb.style.display=_accSelectMode?'inline':'none')}
+function accToggleSelectMode(){_accSelectMode=!_accSelectMode;if(!_accSelectMode){_accSel.clear();_updateAccBulkBar()}document.querySelectorAll('.acc-cb,.acc-cb-all').forEach(cb=>cb.style.display=_accSelectMode?'inline':'none')}
 async function loadAcc(){
   const el=document.getElementById('alist');if(!el)return;el.innerHTML='<div class="spin-lg"></div>';
   try{
@@ -1337,29 +1338,51 @@ async function loadAcc(){
     }
     if(!d.accounts?.length){el.innerHTML='<p class="muted">Chưa thêm tài khoản</p>';return}
     _accList=d.accounts;
-    el.innerHTML=`<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center"><span style="font-size:12px;color:var(--text2)">${d.accounts.length} token</span><span style="flex:1"></span><button class="btn-s" onclick="accToggleSelectMode()">☐ Chọn</button></div>`+d.accounts.map(a=>{
-      const ci=a.cookie_info||{};let cfStatus='',cfClass='';
-      if(ci.hasCfClearance){cfStatus='cf_clearance: ✓ (video ready)';cfClass='ok'}
-      else if(ci.hasSso){cfStatus='Không có cf_clearance (video có thể lỗi)';cfClass='warn'}
-      else{cfStatus='Không có SSO token';cfClass='err'}
-      if(ci.ssoExpired){cfStatus='SSO hết hạn! Thêm lại cookies.';cfClass='err'}
-      // Limited token info
-      let limitHtml='';
-      if(a.status==='limited'&&a.limit_info){
-        const li=a.limit_info;
-        limitHtml=`<div style="margin-top:6px;padding:8px 12px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.15);border-radius:8px;font-size:11px;line-height:1.5">
-          <div style="color:var(--err);font-weight:600">🔒 Token bị khóa (Rate Limit từ Grok.com)</div>
-          <div style="color:var(--text2);margin-top:2px">Giới hạn tạo nội dung đã đạt. Đây là giới hạn từ Grok, không phải lỗi hệ thống.</div>
-          <div style="color:var(--warn);margin-top:4px;font-weight:500">⏱ Tự mở khóa sau: <b>${li.remaining_text}</b></div>
-        </div>`;
-      }else if(a.status==='limited'){
-        limitHtml=`<div style="margin-top:6px;padding:8px 12px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.15);border-radius:8px;font-size:11px;line-height:1.5">
-          <div style="color:var(--err);font-weight:600">🔒 Token bị khóa (Rate Limit)</div>
-          <div style="color:var(--text2);margin-top:2px">Token sẽ tự mở khóa sau khoảng 1h30 - 2h.</div>
-        </div>`;
-      }
-      return `<div class="glass-card acc-card"><div class="acc-top"><input type="checkbox" class="acc-cb" id="acb-${a.id}" style="display:${_accSelectMode?'inline':'none'};cursor:pointer;width:16px;height:16px" onchange="accToggleSel(${a.id})" ${_accSel.has(a.id)?'checked':''}><span class="acc-status ${a.status}">${a.status==='limited'?'🔒 limited':a.status}</span></div><div class="acc-body"><div style="font-size:14px;font-weight:500;margin-bottom:4px">${a.label||'Chưa đặt tên'}</div><div class="tok-prev">${a.token_preview}</div><div style="font-size:11px;color:var(--${cfClass});margin-top:4px">${cfStatus}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${a.last_used?'Lần cuối: '+new Date(a.last_used).toLocaleString():'Chưa dùng'}</div>${limitHtml}</div><div class="acc-bottom"><button class="btn-s" onclick="showUpdateModal(${a.id},'${(a.label||'').replace(/'/g,"\\'")}')">🔄 Cập nhật</button><button class="btn-icon danger" onclick="delAcc(${a.id})" title="Xóa">✕</button></div></div>`}).join('');
+    // Toolbar
+    const toolbar=`<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center"><span style="font-size:12px;color:var(--text2)">${d.accounts.length} token</span><span style="flex:1"></span><button class="btn-s" id="acc-view-btn" onclick="toggleAccView()" title="Đổi kiểu xem">${accViewMode==='grid'?'☰ Bảng':'▦ Card'}</button><button class="btn-s" onclick="accToggleSelectMode()">☐ Chọn</button></div>`;
+    if(accViewMode==='grid'){
+      el.innerHTML=toolbar+`<div class="acc-list">`+d.accounts.map(a=>_renderAccCard(a)).join('')+`</div>`;
+    }else{
+      el.innerHTML=toolbar+`<div class="glass-card tbl-wrap" style="padding:0"><table class="adm-tbl"><thead><tr><th style="width:30px"><input type="checkbox" class="acc-cb-all" onchange="accToggleAll(this.checked)" style="display:${_accSelectMode?'inline':'none'};width:14px;height:14px;cursor:pointer"></th><th>Nhãn</th><th>Token</th><th>CF</th><th>Status</th><th>Lần cuối</th><th>Thao tác</th></tr></thead><tbody>`+d.accounts.map(a=>_renderAccRow(a)).join('')+`</tbody></table></div>`;
+    }
   }catch(e){el.innerHTML=`<p class="err">${e.message}</p>`}
+}
+function _renderAccCard(a){
+  const ci=a.cookie_info||{};let cfStatus='',cfClass='';
+  if(ci.hasCfClearance){cfStatus='cf_clearance: ✓';cfClass='ok'}
+  else if(ci.hasSso){cfStatus='Không có cf_clearance';cfClass='warn'}
+  else{cfStatus='Không có SSO';cfClass='err'}
+  if(ci.ssoExpired){cfStatus='SSO hết hạn!';cfClass='err'}
+  let limitHtml='';
+  if(a.status==='limited'&&a.limit_info){
+    limitHtml=`<div style="margin-top:6px;padding:6px 10px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.15);border-radius:6px;font-size:10px;line-height:1.4">
+      <span style="color:var(--err);font-weight:600">🔒 Rate Limit</span>
+      <span style="color:var(--warn);margin-left:4px">⏱ ${a.limit_info.remaining_text}</span>
+    </div>`;
+  }else if(a.status==='limited'){
+    limitHtml=`<div style="margin-top:6px;padding:6px 10px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.15);border-radius:6px;font-size:10px;color:var(--err)">🔒 Rate Limit</div>`;
+  }
+  return `<div class="glass-card acc-card"><div class="acc-top"><input type="checkbox" class="acc-cb" id="acb-${a.id}" style="display:${_accSelectMode?'inline':'none'};cursor:pointer;width:16px;height:16px" onchange="accToggleSel(${a.id})" ${_accSel.has(a.id)?'checked':''}><span class="acc-status ${a.status}">${a.status==='limited'?'🔒 limited':a.status}</span></div><div class="acc-body"><div style="font-size:14px;font-weight:500;margin-bottom:4px">${a.label||'Chưa đặt tên'}</div><div class="tok-prev">${a.token_preview}</div><div style="font-size:11px;color:var(--${cfClass});margin-top:4px">${cfStatus}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${a.last_used?'Lần cuối: '+new Date(a.last_used).toLocaleString():'Chưa dùng'}</div>${limitHtml}</div><div class="acc-bottom"><button class="btn-s" onclick="showUpdateModal(${a.id},'${(a.label||'').replace(/'/g,"\\'")}')">🔄 Cập nhật</button><button class="btn-icon danger" onclick="delAcc(${a.id})" title="Xóa">✕</button></div></div>`;
+}
+function _renderAccRow(a){
+  const ci=a.cookie_info||{};let cfTxt='',cfCls='text3';
+  if(ci.hasCfClearance){cfTxt='✓ CF';cfCls='ok'}
+  else if(ci.hasSso){cfTxt='⚠ No CF';cfCls='warn'}
+  else{cfTxt='✕ No SSO';cfCls='err'}
+  if(ci.ssoExpired){cfTxt='✕ Expired';cfCls='err'}
+  const limitTxt=a.status==='limited'&&a.limit_info?` (${a.limit_info.remaining_text})`:'';
+  return `<tr><td><input type="checkbox" class="acc-cb" id="acb-${a.id}" style="display:${_accSelectMode?'inline':'none'};width:14px;height:14px;cursor:pointer" onchange="accToggleSel(${a.id})" ${_accSel.has(a.id)?'checked':''}></td><td style="font-weight:500">${a.label||'—'}</td><td class="tok-prev" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.token_preview}</td><td style="color:var(--${cfCls});font-size:11px">${cfTxt}</td><td><span class="acc-status ${a.status}">${a.status==='limited'?'🔒 limited'+limitTxt:a.status}</span></td><td style="font-size:11px;color:var(--text2);white-space:nowrap">${a.last_used?new Date(a.last_used).toLocaleString():'—'}</td><td><div style="display:flex;gap:4px"><button class="btn-s" onclick="showUpdateModal(${a.id},'${(a.label||'').replace(/'/g,"\\'")}')">🔄</button><button class="btn-icon danger" onclick="delAcc(${a.id})" title="Xóa">✕</button></div></td></tr>`;
+}
+function toggleAccView(){
+  accViewMode=accViewMode==='grid'?'table':'grid';
+  localStorage.setItem('gs_accview',accViewMode);
+  loadAcc();
+}
+function accToggleAll(checked){
+  if(!_accList)return;
+  if(checked){_accList.forEach(a=>_accSel.add(a.id))}else{_accSel.clear()}
+  document.querySelectorAll('.acc-cb').forEach(cb=>cb.checked=checked);
+  _updateAccBulkBar();
 }
 async function addAcc(){
   const t=document.getElementById('ntok')?.value?.trim(),l=document.getElementById('nlbl')?.value?.trim();

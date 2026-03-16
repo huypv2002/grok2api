@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 API_BASE = "https://grok.liveyt.pro"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 GITHUB_REPO = "huypv2002/grok2api"
 RELEASE_TAG_PREFIX = "grabber-v"
 
@@ -40,6 +40,7 @@ else:
     _APP_DIR = Path(__file__).parent
 
 PROFILES_DIR = _APP_DIR / "data" / "profiles"
+CREDENTIALS_FILE = _APP_DIR / "data" / "credentials.json"
 LOGIN_URL = "https://accounts.x.ai/sign-in?redirect=grok-com&email=true"
 GROK_URL = "https://grok.com"
 CDP_PORT_BASE = 9250
@@ -718,6 +719,27 @@ class LoginPage(QWidget):
 
         self.pw_input.returnPressed.connect(self.do_login)
 
+        # Auto-fill from saved credentials
+        self._load_saved_creds()
+
+    def _load_saved_creds(self):
+        try:
+            if CREDENTIALS_FILE.exists():
+                creds = json.loads(CREDENTIALS_FILE.read_text("utf-8"))
+                if creds.get("email"):
+                    self.email_input.setText(creds["email"])
+                if creds.get("password"):
+                    self.pw_input.setText(creds["password"])
+        except:
+            pass
+
+    def _save_creds(self, email: str, password: str):
+        try:
+            CREDENTIALS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            CREDENTIALS_FILE.write_text(json.dumps({"email": email, "password": password}), "utf-8")
+        except:
+            pass
+
     def do_login(self):
         email = self.email_input.text().strip()
         pw = self.pw_input.text().strip()
@@ -729,6 +751,7 @@ class LoginPage(QWidget):
         self.err_label.setText("")
         try:
             d = self.api.login(email, pw)
+            self._save_creds(email, pw)
             self.login_success.emit(d)
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", errors="replace")
