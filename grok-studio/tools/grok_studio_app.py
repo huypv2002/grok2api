@@ -16,6 +16,7 @@ import time
 import uuid
 import urllib.request
 import urllib.error
+import signal
 from pathlib import Path
 from threading import Thread
 
@@ -25,11 +26,12 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QStackedWidget,
     QFrame, QScrollArea, QProgressBar, QMessageBox, QFileDialog,
-    QSpinBox, QCheckBox
+    QSpinBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView,
+    QAbstractItemView, QComboBox
 )
 
 API_BASE = "https://grok.liveyt.pro"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 GITHUB_REPO = "huypv2002/grok2api"
 RELEASE_TAG_PREFIX = "grabber-v"
 
@@ -41,6 +43,7 @@ else:
 
 PROFILES_DIR = _APP_DIR / "data" / "profiles"
 CREDENTIALS_FILE = _APP_DIR / "data" / "credentials.json"
+ACCOUNTS_FILE = _APP_DIR / "data" / "accounts.json"
 LOGIN_URL = "https://accounts.x.ai/sign-in?redirect=grok-com&email=true"
 GROK_URL = "https://grok.com"
 CDP_PORT_BASE = 9250
@@ -50,7 +53,7 @@ BATCH_SIZE = 3
 DARK_STYLE = """
 QMainWindow, QWidget { background-color: #0a0a0f; color: #e2e8f0; }
 QLabel { color: #e2e8f0; }
-QLineEdit, QTextEdit, QSpinBox {
+QLineEdit, QTextEdit, QSpinBox, QComboBox {
     background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
     border-radius: 10px; padding: 10px 14px; color: #e2e8f0; font-size: 13px;
 }
@@ -68,6 +71,8 @@ QPushButton#secondary {
 QPushButton#secondary:hover { background: rgba(255,255,255,0.1); }
 QPushButton#danger { background: rgba(248,113,113,0.15); color: #f87171; }
 QPushButton#danger:hover { background: rgba(248,113,113,0.25); }
+QPushButton#success { background: rgba(74,222,128,0.15); color: #4ade80; }
+QPushButton#success:hover { background: rgba(74,222,128,0.25); }
 QProgressBar {
     background: rgba(255,255,255,0.06); border: none; border-radius: 6px; height: 8px;
 }
@@ -86,6 +91,16 @@ QFrame#statusWarn { background: rgba(251,191,36,0.1); border: 1px solid rgba(251
 QCheckBox { color: #e2e8f0; spacing: 6px; }
 QCheckBox::indicator { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); }
 QCheckBox::indicator:checked { background: #6366f1; border-color: #6366f1; }
+QTableWidget {
+    background: transparent; border: none; gridline-color: rgba(255,255,255,0.06);
+    font-size: 12px; color: #e2e8f0;
+}
+QTableWidget::item { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+QTableWidget::item:selected { background: rgba(99,102,241,0.15); }
+QHeaderView::section {
+    background: rgba(255,255,255,0.04); color: #94a3b8; border: none;
+    padding: 8px; font-size: 11px; font-weight: 600;
+}
 """
 
 
@@ -98,10 +113,8 @@ class StudioAPI:
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
-            "Origin": base,
-            "Referer": base + "/",
+            "Origin": base, "Referer": base + "/",
         }
-        # Try to use curl_cffi for CF bypass, fallback to urllib
         self._use_curl = False
         try:
             from curl_cffi import requests as curl_requests
@@ -115,7 +128,6 @@ class StudioAPI:
         headers = {**self._headers, "Content-Type": "application/json"}
         if auth and self.token:
             headers["Authorization"] = f"Bearer {self.token}"
-
         if self._use_curl:
             resp = self._curl.post(url, json=data, headers=headers, impersonate="chrome131", timeout=20)
             resp.raise_for_status()
@@ -133,7 +145,6 @@ class StudioAPI:
         headers = {**self._headers}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
-
         if self._use_curl:
             resp = self._curl.get(url, headers=headers, impersonate="chrome131", timeout=15)
             resp.raise_for_status()
@@ -151,14 +162,110 @@ class StudioAPI:
             self.token = d["token"]
         return d
 
-    def upload_tokens(self, tokens: list[str]) -> dict:
+    def upload_tokens(self, tokens: list) -> dict:
         return self._post("/api/accounts", {"tokens": tokens}, auth=True)
 
     def get_accounts(self) -> dict:
         return self._get("/api/accounts")
 
 
-# ─── CDP Cookie Grabber (reuse from grok_cookie_grabber.py) ───
+# ─── Account Manager ───
+class AccountManager:
+    """Persistent account list with status tracking."""
+
+    def __init__(self):
+        self.accounts: list[dict] = []  # [{email, password, status, sso_preview, cookie_json}]
+        self._load()
+
+    def _load(self):
+        try:
+            if ACCOUNTS_FILE.exists():
+                data = json.loads(ACCOUNTS_FILE.read_text("utf-8"))
+                self.accounts = data if isinstance(data, list) else []
+        except:
+            self.accounts = []
+
+    def save(self):
+        try:
+            ACCOUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            # Don't save cookie_json to disk (too large), only metadata
+            save_data = []
+            for a in self.accounts:
+                save_data.append({
+                    "email": a["email"], "password": a["password"],
+                    "status": a.get("status", "pending"),
+                    "sso_preview": a.get("sso_preview", ""),
+                })
+            ACCOUNTS_FILE.write_text(json.dumps(save_data, ensure_ascii=False, indent=2), "utf-8")
+        except:
+            pass
+
+    def add_from_text(self, text: str) -> int:
+        """Parse email|password lines, add new ones. Returns count added."""
+        added = 0
+        existing = {a["email"] for a in self.accounts}
+        for line in text.strip().split("\n"):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("|", 1)
+            if len(parts) == 2:
+                email, pw = parts[0].strip(), parts[1].strip()
+                if email and pw and email not in existing:
+                    self.accounts.append({
+                        "email": email, "password": pw,
+                        "status": "pending", "sso_preview": "", "cookie_json": None,
+                    })
+                    existing.add(email)
+                    added += 1
+        self.save()
+        return added
+
+    def remove(self, emails: list[str]):
+        self.accounts = [a for a in self.accounts if a["email"] not in emails]
+        self.save()
+
+    def clear(self):
+        self.accounts.clear()
+        self.save()
+
+    def set_status(self, email: str, status: str, sso_preview: str = "", cookie_json: str = None):
+        for a in self.accounts:
+            if a["email"] == email:
+                a["status"] = status
+                if sso_preview:
+                    a["sso_preview"] = sso_preview
+                if cookie_json is not None:
+                    a["cookie_json"] = cookie_json
+                break
+        self.save()
+
+    def reset_all(self):
+        for a in self.accounts:
+            a["status"] = "pending"
+            a["sso_preview"] = ""
+            a["cookie_json"] = None
+        self.save()
+
+    def get_pending(self) -> list[tuple[str, str]]:
+        return [(a["email"], a["password"]) for a in self.accounts if a["status"] == "pending"]
+
+    def get_success_cookies(self) -> list[str]:
+        return [a["cookie_json"] for a in self.accounts if a["status"] == "success" and a.get("cookie_json")]
+
+    @property
+    def total(self): return len(self.accounts)
+    @property
+    def success_count(self): return sum(1 for a in self.accounts if a["status"] == "success")
+    @property
+    def failed_count(self): return sum(1 for a in self.accounts if a["status"] == "failed")
+    @property
+    def pending_count(self): return sum(1 for a in self.accounts if a["status"] == "pending")
+    @property
+    def running_count(self): return sum(1 for a in self.accounts if a["status"] == "running")
+
+
+# ─── CDP Cookie Grabber ───
 FILL_INPUT_JS = """
 (function(sel, val) {
   var el = document.querySelector(sel);
@@ -261,7 +368,6 @@ def has_sso(cookies: list[dict]) -> bool:
 
 
 def _get_profiles_size() -> int:
-    """Get total size of profiles dir in MB."""
     if not PROFILES_DIR.exists():
         return 0
     total = 0
@@ -272,7 +378,6 @@ def _get_profiles_size() -> int:
 
 
 def _delete_profile(email: str):
-    """Delete a single account's Chrome profile."""
     import shutil
     fid = str(uuid.uuid5(uuid.NAMESPACE_DNS, email))
     p = PROFILES_DIR / fid
@@ -280,49 +385,87 @@ def _delete_profile(email: str):
         shutil.rmtree(p, ignore_errors=True)
 
 
-# ─── Async CDP Worker ───
+def _kill_chrome_procs(procs: list):
+    """Force kill all Chrome processes."""
+    for proc in procs:
+        try:
+            proc.kill()
+            proc.wait(timeout=3)
+        except:
+            pass
+    # Also kill any orphaned chrome with our CDP ports
+    if platform.system() == "Windows":
+        for port in range(CDP_PORT_BASE, CDP_PORT_BASE + 50):
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/FI", f"COMMANDLINE eq *--remote-debugging-port={port}*"],
+                    capture_output=True, timeout=3
+                )
+            except:
+                pass
+
+
+# ─── Async CDP Worker (rewritten with proper stop + per-account signals) ───
 class GrabSignals(QObject):
     log = Signal(str)
-    account_done = Signal(str, bool, str)  # email, success, sso_preview
+    account_status = Signal(str, str, str)  # email, status(running/success/failed/timeout), info
     batch_done = Signal()
     progress = Signal(int, int)  # current, total
 
 
 class GrabWorker(QThread):
-    def __init__(self, accounts: list[tuple[str, str]], chrome_path: str, signals: GrabSignals):
+    def __init__(self, accounts: list[tuple[str, str]], chrome_path: str, signals: GrabSignals,
+                 batch_size: int = 3, cleanup: bool = True, timeout_per_acc: int = 120):
         super().__init__()
         self.accounts = accounts
         self.chrome_path = chrome_path
         self.signals = signals
-        self.results = []  # list of (email, cookie_json_str)
+        self.batch_size = batch_size
+        self.cleanup = cleanup
+        self.timeout_per_acc = timeout_per_acc
+        self.results: list[tuple[str, str]] = []  # (email, cookie_json_str)
         self._stop = False
+        self._chrome_procs: list = []  # track ALL chrome processes for cleanup
 
     def stop(self):
+        """Signal stop — kills all Chrome processes immediately."""
         self._stop = True
+        self.signals.log.emit("⏹ Đang dừng — kill tất cả Chrome...")
+        _kill_chrome_procs(self._chrome_procs)
+        self._chrome_procs.clear()
 
     def run(self):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(self._run())
-        loop.close()
+        try:
+            loop.run_until_complete(self._run())
+        except Exception as e:
+            self.signals.log.emit(f"❌ Worker error: {e}")
+        finally:
+            # Ensure ALL chrome killed on exit
+            _kill_chrome_procs(self._chrome_procs)
+            self._chrome_procs.clear()
+            loop.close()
 
     async def _run(self):
         import websockets
         total = len(self.accounts)
         done_count = 0
 
-        for b_start in range(0, total, BATCH_SIZE):
+        for b_start in range(0, total, self.batch_size):
             if self._stop:
                 break
-            batch = self.accounts[b_start:b_start + BATCH_SIZE]
+            batch = self.accounts[b_start:b_start + self.batch_size]
             self.signals.log.emit(f"\n📦 Batch [{b_start+1}-{b_start+len(batch)}] / {total}")
 
             procs = []
             screen_w = 1440
-            cols = min(len(batch), BATCH_SIZE)
+            cols = min(len(batch), self.batch_size)
             win_w = screen_w // cols
 
             for idx, (email, _) in enumerate(batch):
+                if self._stop:
+                    break
                 port = CDP_PORT_BASE + b_start + idx
                 profile = get_profile_path(email)
                 args = [
@@ -336,50 +479,85 @@ class GrabWorker(QThread):
                 ]
                 proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 procs.append(proc)
+                self._chrome_procs.append(proc)
+                self.signals.account_status.emit(email, "running", "Mở Chrome...")
                 self.signals.log.emit(f"  🌐 Chrome port={port} → {email}")
                 if idx < len(batch) - 1:
                     await asyncio.sleep(2)
+
+            if self._stop:
+                _kill_chrome_procs(procs)
+                break
 
             await asyncio.sleep(3)
 
             tasks = []
             for idx, (email, password) in enumerate(batch):
+                if self._stop:
+                    break
                 port = CDP_PORT_BASE + b_start + idx
-                tasks.append(self._grab_one(email, password, port, b_start + idx + 1))
+                tasks.append(self._grab_one_safe(email, password, port, b_start + idx + 1))
+
+            if self._stop:
+                _kill_chrome_procs(procs)
+                break
 
             results = await asyncio.gather(*tasks)
 
             for (email, _), cookies in zip(batch, results):
+                if self._stop:
+                    break
                 done_count += 1
                 self.signals.progress.emit(done_count, total)
                 if cookies and has_sso(cookies):
                     sso = next(c["value"] for c in cookies if c["name"] == "sso")
                     cookie_str = json.dumps(cookies, ensure_ascii=False)
                     self.results.append((email, cookie_str))
-                    self.signals.account_done.emit(email, True, sso[:20] + "...")
+                    self.signals.account_status.emit(email, "success", sso[:20] + "...")
                     self.signals.log.emit(f"  ✅ {email}")
                 else:
-                    self.signals.account_done.emit(email, False, "")
+                    self.signals.account_status.emit(email, "failed", "Không lấy được cookie")
                     self.signals.log.emit(f"  ❌ {email}")
 
-            for proc in procs:
-                try:
-                    proc.terminate()
-                    proc.wait(timeout=5)
-                except:
-                    try: proc.kill()
-                    except: pass
+            # Kill Chrome for this batch
+            _kill_chrome_procs(procs)
+            for p in procs:
+                if p in self._chrome_procs:
+                    self._chrome_procs.remove(p)
+
+            # Cleanup profiles
+            if self.cleanup:
+                for email, _ in batch:
+                    _delete_profile(email)
 
             if b_start + len(batch) < total and not self._stop:
-                await asyncio.sleep(3)
+                await asyncio.sleep(2)
 
         self.signals.batch_done.emit()
+
+    async def _grab_one_safe(self, email, password, port, num):
+        """Wrapper with hard timeout per account."""
+        try:
+            return await asyncio.wait_for(
+                self._grab_one(email, password, port, num),
+                timeout=self.timeout_per_acc
+            )
+        except asyncio.TimeoutError:
+            self.signals.log.emit(f"    [{num}] ⏰ Timeout ({self.timeout_per_acc}s)")
+            self.signals.account_status.emit(email, "timeout", f"Timeout {self.timeout_per_acc}s")
+            return None
+        except Exception as e:
+            self.signals.log.emit(f"    [{num}] ✕ {e}")
+            self.signals.account_status.emit(email, "failed", str(e)[:50])
+            return None
 
     async def _grab_one(self, email, password, port, num):
         import websockets
         label = f"[{num}]"
         ws_url = None
-        for _ in range(20):
+        for _ in range(15):
+            if self._stop:
+                return None
             try:
                 resp = urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2)
                 tabs = json.loads(resp.read())
@@ -406,7 +584,9 @@ class GrabWorker(QThread):
             self.signals.log.emit(f"    {label} ✕ {e}")
             return None
 
-    async def _cdp(self, ws, method, params=None, timeout=15):
+    async def _cdp(self, ws, method, params=None, timeout=10):
+        if self._stop:
+            return {}
         msg_id = int(time.time() * 1000) % 999999
         payload = {"id": msg_id, "method": method}
         if params:
@@ -414,13 +594,15 @@ class GrabWorker(QThread):
         await ws.send(json.dumps(payload))
         deadline = time.time() + timeout
         while time.time() < deadline:
+            if self._stop:
+                return {}
             try:
-                raw = await asyncio.wait_for(ws.recv(), timeout=max(0.5, deadline - time.time()))
+                raw = await asyncio.wait_for(ws.recv(), timeout=min(1.0, deadline - time.time()))
                 data = json.loads(raw)
                 if data.get("id") == msg_id:
                     return data.get("result", {})
             except asyncio.TimeoutError:
-                break
+                continue
             except:
                 break
         return {}
@@ -448,6 +630,8 @@ class GrabWorker(QThread):
 
         # CF check
         for i in range(40):
+            if self._stop:
+                return None
             if not await self._eval(ws, CHECK_CF_JS):
                 break
             await asyncio.sleep(1)
@@ -461,27 +645,32 @@ class GrabWorker(QThread):
 
         # Wait form
         form = None
-        for _ in range(25):
+        for _ in range(20):
+            if self._stop:
+                return None
             form = await self._eval(ws, DETECT_FORM_JS)
             if form and form.get("hasEmail"):
                 break
             await asyncio.sleep(1)
         if not form or not form.get("hasEmail"):
             self.signals.log.emit(f"    {label} ⚠ Không thấy form — chờ thủ công")
-            return await self._wait_redirect(ws, label, 300)
+            return await self._wait_redirect(ws, label, 90)
 
         is_two_step = form.get("hasEmail") and not form.get("hasPassword")
         safe_email = email.replace("\\", "\\\\").replace("'", "\\'")
         for sel in ['input[type="email"]', 'input[name="email"]']:
             await self._eval(ws, FILL_INPUT_JS % (sel, safe_email))
         self.signals.log.emit(f"    {label} ✓ Email filled")
+        self.signals.account_status.emit(email, "running", "Đang đăng nhập...")
         await asyncio.sleep(1)
 
         if is_two_step:
             await self._click_submit(ws)
             self.signals.log.emit(f"    {label} → Next")
             await asyncio.sleep(3)
-            for i in range(90):
+            for i in range(60):
+                if self._stop:
+                    return None
                 fi = await self._eval(ws, DETECT_FORM_JS)
                 if fi and fi.get("hasPassword"):
                     break
@@ -504,17 +693,21 @@ class GrabWorker(QThread):
         self.signals.log.emit(f"    {label} → Login")
         await asyncio.sleep(3)
 
-        return await self._wait_redirect(ws, label, 300)
+        return await self._wait_redirect(ws, label, 90)
 
     async def _wait_redirect(self, ws, label, timeout):
         for i in range(timeout):
+            if self._stop:
+                return None
             try:
                 url = await self._eval(ws, "window.location.href") or ""
                 if "accounts.x.ai/account" in url and i > 15:
                     await self._cdp(ws, "Page.navigate", {"url": GROK_URL})
                     await asyncio.sleep(3)
                 if "grok.com" in url and "accounts.x.ai" not in url:
-                    for _ in range(20):
+                    for _ in range(15):
+                        if self._stop:
+                            return None
                         if not await self._eval(ws, CHECK_CF_JS):
                             break
                         await asyncio.sleep(1)
@@ -531,8 +724,7 @@ class GrabWorker(QThread):
 
 # ─── Auto Updater ───
 class UpdateChecker(QThread):
-    """Check GitHub releases for newer version."""
-    update_available = Signal(str, str)  # new_version, download_url
+    update_available = Signal(str, str)
     no_update = Signal()
     error = Signal(str)
 
@@ -544,19 +736,17 @@ class UpdateChecker(QThread):
             req.add_header("User-Agent", "GrokStudioGrabber")
             resp = urllib.request.urlopen(req, timeout=10)
             releases = json.loads(resp.read())
-
             for rel in releases:
                 tag = rel.get("tag_name", "")
                 if not tag.startswith(RELEASE_TAG_PREFIX):
                     continue
                 remote_ver = tag[len(RELEASE_TAG_PREFIX):]
                 if self._is_newer(remote_ver, APP_VERSION):
-                    # Find windows zip asset
                     for asset in rel.get("assets", []):
                         if asset["name"].endswith("-windows.zip"):
                             self.update_available.emit(remote_ver, asset["browser_download_url"])
                             return
-                break  # Only check latest matching release
+                break
             self.no_update.emit()
         except Exception as e:
             self.error.emit(str(e))
@@ -564,17 +754,14 @@ class UpdateChecker(QThread):
     @staticmethod
     def _is_newer(remote: str, local: str) -> bool:
         try:
-            r = [int(x) for x in remote.split(".")]
-            l = [int(x) for x in local.split(".")]
-            return r > l
+            return [int(x) for x in remote.split(".")] > [int(x) for x in local.split(".")]
         except:
             return False
 
 
 class UpdateDownloader(QThread):
-    """Download and apply update."""
-    progress = Signal(int)  # percent
-    finished = Signal(bool, str)  # success, message
+    progress = Signal(int)
+    finished = Signal(bool, str)
 
     def __init__(self, download_url: str, new_version: str):
         super().__init__()
@@ -582,38 +769,27 @@ class UpdateDownloader(QThread):
         self.new_version = new_version
 
     def run(self):
-        import zipfile
-        import shutil
-        import tempfile
-
+        import zipfile, shutil, tempfile
         try:
-            # Download to temp
             tmp_dir = Path(tempfile.mkdtemp())
             zip_path = tmp_dir / "update.zip"
-
             req = urllib.request.Request(self.download_url)
             req.add_header("User-Agent", "GrokStudioGrabber")
             resp = urllib.request.urlopen(req, timeout=120)
             total = int(resp.headers.get("Content-Length", 0))
             downloaded = 0
-            chunk_size = 64 * 1024
-
             with open(zip_path, "wb") as f:
                 while True:
-                    chunk = resp.read(chunk_size)
+                    chunk = resp.read(64 * 1024)
                     if not chunk:
                         break
                     f.write(chunk)
                     downloaded += len(chunk)
                     if total > 0:
                         self.progress.emit(int(downloaded * 100 / total))
-
-            # Extract
             extract_dir = tmp_dir / "extracted"
             with zipfile.ZipFile(zip_path, "r") as zf:
                 zf.extractall(extract_dir)
-
-            # Find the inner folder (GrokStudioGrabber/)
             inner = None
             for item in extract_dir.iterdir():
                 if item.is_dir():
@@ -621,30 +797,16 @@ class UpdateDownloader(QThread):
                     break
             if not inner:
                 inner = extract_dir
-
-            # Write update script that replaces files after app exits
             if getattr(sys, 'frozen', False):
                 app_dir = Path(sys.executable).parent
                 exe_name = Path(sys.executable).name
+                bat_path = tmp_dir / "update.bat"
+                bat_content = f'@echo off\necho Đang cập nhật...\ntimeout /t 2 /nobreak >nul\nxcopy /E /Y /Q "{inner}\\*" "{app_dir}\\"\nstart "" "{app_dir / exe_name}"\ndel "%~f0"\n'
+                with open(bat_path, "w", encoding="utf-8") as f:
+                    f.write(bat_content)
+                self.finished.emit(True, str(bat_path))
             else:
-                # Dev mode — just report success without replacing
-                self.finished.emit(True, f"Dev mode: bản {self.new_version} đã tải về {inner}")
-                return
-
-            # Create a batch script to replace files
-            bat_path = tmp_dir / "update.bat"
-            bat_content = f"""@echo off
-echo Đang cập nhật Grok Studio Grabber...
-timeout /t 2 /nobreak >nul
-xcopy /E /Y /Q "{inner}\\*" "{app_dir}\\"
-echo Cập nhật xong! Đang khởi động lại...
-start "" "{app_dir / exe_name}"
-del "%~f0"
-"""
-            with open(bat_path, "w", encoding="utf-8") as f:
-                f.write(bat_content)
-
-            self.finished.emit(True, str(bat_path))
+                self.finished.emit(True, f"Dev mode: v{self.new_version} tải về {inner}")
         except Exception as e:
             self.finished.emit(False, str(e))
 
@@ -662,7 +824,6 @@ class LoginPage(QWidget):
         layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(16)
 
-        # Logo
         title = QLabel("🎬 Grok Studio")
         title.setFont(QFont("", 22, QFont.Bold))
         title.setAlignment(Qt.AlignCenter)
@@ -673,10 +834,8 @@ class LoginPage(QWidget):
         sub.setAlignment(Qt.AlignCenter)
         sub.setStyleSheet("color: #94a3b8; font-size: 13px;")
         layout.addWidget(sub)
-
         layout.addSpacing(10)
 
-        # Form card
         card = QFrame()
         card.setObjectName("card")
         card.setFixedWidth(380)
@@ -706,7 +865,6 @@ class LoginPage(QWidget):
 
         layout.addWidget(card, alignment=Qt.AlignCenter)
 
-        # Server URL
         srv = QLabel(f"Server: {API_BASE}")
         srv.setAlignment(Qt.AlignCenter)
         srv.setStyleSheet("color: #475569; font-size: 11px;")
@@ -718,8 +876,6 @@ class LoginPage(QWidget):
         layout.addWidget(ver)
 
         self.pw_input.returnPressed.connect(self.do_login)
-
-        # Auto-fill from saved credentials
         self._load_saved_creds()
 
     def _load_saved_creds(self):
@@ -762,7 +918,6 @@ class LoginPage(QWidget):
             self.err_label.setText(f"Lỗi: {msg}")
         except Exception as e:
             msg = str(e)
-            # curl_cffi HTTPError
             if hasattr(e, 'response') and e.response is not None:
                 try:
                     msg = e.response.json().get("error", e.response.text[:200])
@@ -781,14 +936,15 @@ class MainPage(QWidget):
         self.user = user
         self.worker = None
         self.chrome_path = find_chrome()
+        self.acc_mgr = AccountManager()
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
 
         # Header
         hdr = QHBoxLayout()
         title = QLabel("🎬 Grok Studio — Cookie Grabber")
-        title.setFont(QFont("", 16, QFont.Bold))
+        title.setFont(QFont("", 15, QFont.Bold))
         title.setStyleSheet("color: #a78bfa;")
         hdr.addWidget(title)
         hdr.addStretch()
@@ -797,84 +953,140 @@ class MainPage(QWidget):
         hdr.addWidget(user_label)
         layout.addLayout(hdr)
 
-        # Chrome status + profile info
+        # Chrome status
         info_row = QHBoxLayout()
         if self.chrome_path:
-            cs = QFrame()
-            cs.setObjectName("statusOk")
-            csl = QHBoxLayout(cs)
-            csl.addWidget(QLabel(f"✓ Chrome: {os.path.basename(self.chrome_path)}"))
+            cs = QFrame(); cs.setObjectName("statusOk")
+            csl = QHBoxLayout(cs); csl.addWidget(QLabel(f"✓ Chrome: {os.path.basename(self.chrome_path)}"))
             info_row.addWidget(cs)
         else:
-            cs = QFrame()
-            cs.setObjectName("statusErr")
-            csl = QHBoxLayout(cs)
-            csl.addWidget(QLabel("✕ Không tìm thấy Chrome"))
+            cs = QFrame(); cs.setObjectName("statusErr")
+            csl = QHBoxLayout(cs); csl.addWidget(QLabel("✕ Không tìm thấy Chrome"))
             info_row.addWidget(cs)
-
-        # Profile disk info
         prof_size = _get_profiles_size()
-        prof_info = QFrame()
-        prof_info.setObjectName("statusWarn" if prof_size > 500 else "statusOk")
+        prof_info = QFrame(); prof_info.setObjectName("statusWarn" if prof_size > 500 else "statusOk")
         pil = QHBoxLayout(prof_info)
-        pil.addWidget(QLabel(f"📁 Profiles: {PROFILES_DIR.absolute()} ({prof_size}MB)"))
+        pil.addWidget(QLabel(f"📁 Profiles: {prof_size}MB"))
         if prof_size > 0:
-            clean_btn = QPushButton("🗑 Xóa tất cả profiles")
-            clean_btn.setObjectName("danger")
-            clean_btn.setFixedWidth(160)
+            clean_btn = QPushButton("🗑 Xóa profiles")
+            clean_btn.setObjectName("danger"); clean_btn.setFixedWidth(120)
             clean_btn.setCursor(Qt.PointingHandCursor)
             clean_btn.clicked.connect(self._clean_all_profiles)
             pil.addWidget(clean_btn)
         info_row.addWidget(prof_info)
         layout.addLayout(info_row)
 
-        # Input area
-        input_card = QFrame()
-        input_card.setObjectName("card")
-        il = QVBoxLayout(input_card)
-        il.setSpacing(8)
+        # ── Account Management Card ──
+        acc_card = QFrame(); acc_card.setObjectName("card")
+        al = QVBoxLayout(acc_card); al.setSpacing(8)
 
-        il.addWidget(QLabel("Danh sách tài khoản Grok (email|password, mỗi dòng 1 account):"))
-        self.acc_input = QTextEdit()
-        self.acc_input.setPlaceholderText("user1@gmail.com|password123\nuser2@gmail.com|pass456")
-        self.acc_input.setMaximumHeight(150)
-        il.addWidget(self.acc_input)
+        # Import row
+        imp_row = QHBoxLayout()
+        imp_row.addWidget(QLabel("📋 Tài khoản Grok:"))
+        imp_row.addStretch()
 
-        btn_row = QHBoxLayout()
-        load_btn = QPushButton("📂 Mở file .txt")
-        load_btn.setObjectName("secondary")
-        load_btn.setCursor(Qt.PointingHandCursor)
-        load_btn.clicked.connect(self.load_file)
-        btn_row.addWidget(load_btn)
+        self.add_input = QLineEdit()
+        self.add_input.setPlaceholderText("email|password (Enter để thêm)")
+        self.add_input.setFixedWidth(280)
+        self.add_input.returnPressed.connect(self._add_single)
+        imp_row.addWidget(self.add_input)
 
-        btn_row.addWidget(QLabel("Batch size:"))
+        load_btn = QPushButton("📂 Import TXT")
+        load_btn.setObjectName("secondary"); load_btn.setCursor(Qt.PointingHandCursor)
+        load_btn.setFixedWidth(110)
+        load_btn.clicked.connect(self._import_file)
+        imp_row.addWidget(load_btn)
+
+        paste_btn = QPushButton("📋 Paste")
+        paste_btn.setObjectName("secondary"); paste_btn.setCursor(Qt.PointingHandCursor)
+        paste_btn.setFixedWidth(70)
+        paste_btn.clicked.connect(self._paste_accounts)
+        imp_row.addWidget(paste_btn)
+
+        al.addLayout(imp_row)
+
+        # Account table
+        self.acc_table = QTableWidget()
+        self.acc_table.setColumnCount(4)
+        self.acc_table.setHorizontalHeaderLabels(["Email", "Password", "Status", "Info"])
+        self.acc_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.acc_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.acc_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.acc_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.acc_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.acc_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.acc_table.setMaximumHeight(220)
+        self.acc_table.verticalHeader().setDefaultSectionSize(28)
+        al.addWidget(self.acc_table)
+
+        # Table action row
+        tbl_row = QHBoxLayout()
+        self.acc_count_label = QLabel("0 tài khoản")
+        self.acc_count_label.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        tbl_row.addWidget(self.acc_count_label)
+        tbl_row.addStretch()
+
+        del_sel_btn = QPushButton("🗑 Xóa chọn")
+        del_sel_btn.setObjectName("danger"); del_sel_btn.setCursor(Qt.PointingHandCursor)
+        del_sel_btn.setFixedWidth(100)
+        del_sel_btn.clicked.connect(self._delete_selected)
+        tbl_row.addWidget(del_sel_btn)
+
+        clear_btn = QPushButton("🗑 Xóa hết")
+        clear_btn.setObjectName("danger"); clear_btn.setCursor(Qt.PointingHandCursor)
+        clear_btn.setFixedWidth(90)
+        clear_btn.clicked.connect(self._clear_accounts)
+        tbl_row.addWidget(clear_btn)
+
+        reset_btn = QPushButton("🔄 Reset status")
+        reset_btn.setObjectName("secondary"); reset_btn.setCursor(Qt.PointingHandCursor)
+        reset_btn.setFixedWidth(110)
+        reset_btn.clicked.connect(self._reset_status)
+        tbl_row.addWidget(reset_btn)
+
+        al.addLayout(tbl_row)
+        layout.addWidget(acc_card)
+
+        # ── Controls Card ──
+        ctrl_card = QFrame(); ctrl_card.setObjectName("card")
+        ctl = QHBoxLayout(ctrl_card)
+
+        ctl.addWidget(QLabel("Batch:"))
         self.batch_spin = QSpinBox()
-        self.batch_spin.setRange(1, 5)
-        self.batch_spin.setValue(BATCH_SIZE)
-        self.batch_spin.setFixedWidth(60)
-        btn_row.addWidget(self.batch_spin)
+        self.batch_spin.setRange(1, 5); self.batch_spin.setValue(BATCH_SIZE)
+        self.batch_spin.setFixedWidth(55)
+        ctl.addWidget(self.batch_spin)
 
-        self.cleanup_cb = QCheckBox("Xóa profile sau khi grab")
+        ctl.addWidget(QLabel("Timeout/acc:"))
+        self.timeout_spin = QSpinBox()
+        self.timeout_spin.setRange(30, 300); self.timeout_spin.setValue(120)
+        self.timeout_spin.setSuffix("s"); self.timeout_spin.setFixedWidth(75)
+        ctl.addWidget(self.timeout_spin)
+
+        self.cleanup_cb = QCheckBox("Xóa profile sau grab")
         self.cleanup_cb.setChecked(True)
-        self.cleanup_cb.setToolTip("Xóa Chrome profile sau khi lấy cookie xong (tiết kiệm ~100MB/account)")
-        btn_row.addWidget(self.cleanup_cb)
+        ctl.addWidget(self.cleanup_cb)
 
-        btn_row.addStretch()
+        ctl.addStretch()
 
         self.start_btn = QPushButton("🚀 Bắt đầu Grab")
         self.start_btn.setCursor(Qt.PointingHandCursor)
         self.start_btn.clicked.connect(self.start_grab)
-        btn_row.addWidget(self.start_btn)
+        ctl.addWidget(self.start_btn)
 
         self.stop_btn = QPushButton("⏹ Dừng")
-        self.stop_btn.setObjectName("danger")
-        self.stop_btn.setCursor(Qt.PointingHandCursor)
+        self.stop_btn.setObjectName("danger"); self.stop_btn.setCursor(Qt.PointingHandCursor)
         self.stop_btn.setEnabled(False)
         self.stop_btn.clicked.connect(self.stop_grab)
-        btn_row.addWidget(self.stop_btn)
+        ctl.addWidget(self.stop_btn)
 
-        il.addLayout(btn_row)
-        layout.addWidget(input_card)
+        self.upload_btn = QPushButton("📤 Upload lên Server")
+        self.upload_btn.setObjectName("success"); self.upload_btn.setCursor(Qt.PointingHandCursor)
+        self.upload_btn.setEnabled(False)
+        self.upload_btn.clicked.connect(self.upload_tokens)
+        ctl.addWidget(self.upload_btn)
+
+        layout.addWidget(ctrl_card)
 
         # Progress
         self.progress = QProgressBar()
@@ -885,35 +1097,158 @@ class MainPage(QWidget):
         self.status_label.setStyleSheet("color: #94a3b8; font-size: 12px;")
         layout.addWidget(self.status_label)
 
-        # Results area
-        self.result_area = QFrame()
-        self.result_area.setObjectName("card")
-        rl = QVBoxLayout(self.result_area)
-        rl.addWidget(QLabel("Kết quả:"))
-        self.result_list = QTextEdit()
-        self.result_list.setReadOnly(True)
-        self.result_list.setMaximumHeight(200)
-        self.result_list.setStyleSheet("font-family: monospace; font-size: 11px;")
-        rl.addWidget(self.result_list)
-
-        upload_row = QHBoxLayout()
-        self.upload_btn = QPushButton("📤 Upload lên Grok Studio")
-        self.upload_btn.setCursor(Qt.PointingHandCursor)
-        self.upload_btn.setEnabled(False)
-        self.upload_btn.clicked.connect(self.upload_tokens)
-        upload_row.addWidget(self.upload_btn)
-        upload_row.addStretch()
-        rl.addLayout(upload_row)
-
-        layout.addWidget(self.result_area)
-
         # Log
         self.log = QTextEdit()
         self.log.setReadOnly(True)
-        self.log.setMaximumHeight(180)
+        self.log.setMaximumHeight(160)
         self.log.setStyleSheet("font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.3); border-radius: 8px;")
         layout.addWidget(self.log)
 
+        # Initial render
+        self._refresh_table()
+
+    # ── Account Management ──
+    def _add_single(self):
+        text = self.add_input.text().strip()
+        if not text:
+            return
+        added = self.acc_mgr.add_from_text(text)
+        if added:
+            self.add_input.clear()
+            self._refresh_table()
+            self.status_label.setText(f"✓ Thêm {added} tài khoản")
+        else:
+            self.status_label.setText("⚠ Không thêm được (sai format hoặc đã tồn tại)")
+
+    def _import_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Mở file accounts", "", "Text files (*.txt);;All (*)")
+        if path:
+            with open(path, "r", encoding="utf-8") as f:
+                text = f.read()
+            added = self.acc_mgr.add_from_text(text)
+            self._refresh_table()
+            self.status_label.setText(f"✓ Import {added} tài khoản mới từ {os.path.basename(path)}")
+
+    def _paste_accounts(self):
+        clipboard = QApplication.clipboard()
+        text = clipboard.text()
+        if not text:
+            self.status_label.setText("⚠ Clipboard trống")
+            return
+        added = self.acc_mgr.add_from_text(text)
+        self._refresh_table()
+        self.status_label.setText(f"✓ Paste {added} tài khoản mới")
+
+    def _delete_selected(self):
+        rows = set(idx.row() for idx in self.acc_table.selectedIndexes())
+        if not rows:
+            return
+        emails = [self.acc_mgr.accounts[r]["email"] for r in rows if r < len(self.acc_mgr.accounts)]
+        self.acc_mgr.remove(emails)
+        self._refresh_table()
+        self.status_label.setText(f"🗑 Đã xóa {len(emails)} tài khoản")
+
+    def _clear_accounts(self):
+        if not self.acc_mgr.total:
+            return
+        if QMessageBox.question(self, "Xóa hết", f"Xóa tất cả {self.acc_mgr.total} tài khoản?") != QMessageBox.Yes:
+            return
+        self.acc_mgr.clear()
+        self._refresh_table()
+        self.status_label.setText("🗑 Đã xóa tất cả")
+
+    def _reset_status(self):
+        self.acc_mgr.reset_all()
+        self._refresh_table()
+        self.status_label.setText("🔄 Đã reset tất cả về pending")
+
+    def _refresh_table(self):
+        accs = self.acc_mgr.accounts
+        self.acc_table.setRowCount(len(accs))
+        status_colors = {
+            "pending": "#94a3b8", "running": "#fbbf24", "success": "#4ade80",
+            "failed": "#f87171", "timeout": "#fb923c",
+        }
+        status_icons = {
+            "pending": "⏳", "running": "🔄", "success": "✅",
+            "failed": "❌", "timeout": "⏰",
+        }
+        for i, a in enumerate(accs):
+            email_item = QTableWidgetItem(a["email"])
+            email_item.setFlags(email_item.flags() & ~Qt.ItemIsEditable)
+            self.acc_table.setItem(i, 0, email_item)
+
+            pw_item = QTableWidgetItem("•" * min(len(a["password"]), 8))
+            pw_item.setFlags(pw_item.flags() & ~Qt.ItemIsEditable)
+            pw_item.setForeground(QColor("#64748b"))
+            self.acc_table.setItem(i, 1, pw_item)
+
+            st = a.get("status", "pending")
+            st_item = QTableWidgetItem(f"{status_icons.get(st, '?')} {st}")
+            st_item.setFlags(st_item.flags() & ~Qt.ItemIsEditable)
+            st_item.setForeground(QColor(status_colors.get(st, "#94a3b8")))
+            self.acc_table.setItem(i, 2, st_item)
+
+            info_item = QTableWidgetItem(a.get("sso_preview", ""))
+            info_item.setFlags(info_item.flags() & ~Qt.ItemIsEditable)
+            info_item.setForeground(QColor("#64748b"))
+            self.acc_table.setItem(i, 3, info_item)
+
+        ok = self.acc_mgr.success_count
+        fail = self.acc_mgr.failed_count
+        pend = self.acc_mgr.pending_count
+        total = self.acc_mgr.total
+        parts = [f"{total} tài khoản"]
+        if ok: parts.append(f"✅ {ok}")
+        if fail: parts.append(f"❌ {fail}")
+        if pend and pend != total: parts.append(f"⏳ {pend}")
+        self.acc_count_label.setText(" · ".join(parts))
+
+        # Enable upload if there are successful grabs
+        self.upload_btn.setEnabled(ok > 0)
+        if ok > 0:
+            self.upload_btn.setText(f"📤 Upload {ok} token")
+
+    def _update_account_row(self, email: str, status: str, info: str):
+        """Update a single row in the table without full refresh."""
+        for i, a in enumerate(self.acc_mgr.accounts):
+            if a["email"] == email:
+                status_colors = {
+                    "pending": "#94a3b8", "running": "#fbbf24", "success": "#4ade80",
+                    "failed": "#f87171", "timeout": "#fb923c",
+                }
+                status_icons = {
+                    "pending": "⏳", "running": "🔄", "success": "✅",
+                    "failed": "❌", "timeout": "⏰",
+                }
+                st_item = QTableWidgetItem(f"{status_icons.get(status, '?')} {status}")
+                st_item.setFlags(st_item.flags() & ~Qt.ItemIsEditable)
+                st_item.setForeground(QColor(status_colors.get(status, "#94a3b8")))
+                self.acc_table.setItem(i, 2, st_item)
+
+                info_item = QTableWidgetItem(info)
+                info_item.setFlags(info_item.flags() & ~Qt.ItemIsEditable)
+                info_item.setForeground(QColor("#64748b"))
+                self.acc_table.setItem(i, 3, info_item)
+
+                # Scroll to this row
+                self.acc_table.scrollToItem(st_item)
+                break
+        # Update count label
+        ok = self.acc_mgr.success_count
+        fail = self.acc_mgr.failed_count
+        run = self.acc_mgr.running_count
+        total = self.acc_mgr.total
+        parts = [f"{total} tài khoản"]
+        if ok: parts.append(f"✅ {ok}")
+        if fail: parts.append(f"❌ {fail}")
+        if run: parts.append(f"🔄 {run}")
+        self.acc_count_label.setText(" · ".join(parts))
+        if ok > 0:
+            self.upload_btn.setEnabled(True)
+            self.upload_btn.setText(f"📤 Upload {ok} token")
+
+    # ── Grab ──
     def _clean_all_profiles(self):
         import shutil
         if PROFILES_DIR.exists():
@@ -921,65 +1256,58 @@ class MainPage(QWidget):
             PROFILES_DIR.mkdir(parents=True, exist_ok=True)
             QMessageBox.information(self, "Xóa profiles", "Đã xóa tất cả Chrome profiles")
 
-    def load_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Mở file accounts", "", "Text files (*.txt);;All (*)")
-        if path:
-            with open(path, "r", encoding="utf-8") as f:
-                self.acc_input.setPlainText(f.read())
-
-    def _parse_accounts(self) -> list[tuple[str, str]]:
-        accounts = []
-        for line in self.acc_input.toPlainText().strip().split("\n"):
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split("|", 1)
-            if len(parts) == 2:
-                accounts.append((parts[0].strip(), parts[1].strip()))
-        return accounts
-
     def start_grab(self):
         if not self.chrome_path:
             QMessageBox.warning(self, "Lỗi", "Không tìm thấy Chrome")
             return
-        accounts = self._parse_accounts()
-        if not accounts:
-            QMessageBox.warning(self, "Lỗi", "Nhập ít nhất 1 account (email|password)")
+        pending = self.acc_mgr.get_pending()
+        if not pending:
+            QMessageBox.warning(self, "Lỗi", "Không có tài khoản pending. Thêm tài khoản hoặc nhấn Reset status.")
             return
 
-        global BATCH_SIZE
-        BATCH_SIZE = self.batch_spin.value()
-
         self.log.clear()
-        self.result_list.clear()
         self.progress.setVisible(True)
-        self.progress.setMaximum(len(accounts))
+        self.progress.setMaximum(len(pending))
         self.progress.setValue(0)
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self.upload_btn.setEnabled(False)
-        self.status_label.setText(f"Đang grab {len(accounts)} accounts...")
+        self.status_label.setText(f"Đang grab {len(pending)} accounts...")
 
         signals = GrabSignals()
         signals.log.connect(self._on_log)
-        signals.account_done.connect(self._on_account_done)
+        signals.account_status.connect(self._on_account_status)
         signals.batch_done.connect(self._on_batch_done)
         signals.progress.connect(self._on_progress)
 
-        self.worker = GrabWorker(accounts, self.chrome_path, signals)
+        self.worker = GrabWorker(
+            pending, self.chrome_path, signals,
+            batch_size=self.batch_spin.value(),
+            cleanup=self.cleanup_cb.isChecked(),
+            timeout_per_acc=self.timeout_spin.value(),
+        )
         self.worker.start()
 
     def stop_grab(self):
         if self.worker:
             self.worker.stop()
-            self.status_label.setText("Đang dừng...")
+            self.stop_btn.setEnabled(False)
+            self.status_label.setText("⏹ Đang dừng — kill Chrome processes...")
 
     def _on_log(self, msg):
         self.log.append(msg)
 
-    def _on_account_done(self, email, success, sso_preview):
-        icon = "✅" if success else "❌"
-        self.result_list.append(f"{icon} {email}" + (f" — sso={sso_preview}" if success else " — FAILED"))
+    def _on_account_status(self, email, status, info):
+        # Map timeout → failed for storage
+        store_status = "failed" if status == "timeout" else status
+        cookie_json = None
+        # Find cookie from worker results
+        if status == "success" and self.worker:
+            for e, cj in self.worker.results:
+                if e == email:
+                    cookie_json = cj
+                    break
+        self.acc_mgr.set_status(email, store_status, sso_preview=info, cookie_json=cookie_json)
+        self._update_account_row(email, status, info)
 
     def _on_progress(self, current, total):
         self.progress.setValue(current)
@@ -987,35 +1315,27 @@ class MainPage(QWidget):
     def _on_batch_done(self):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
-        results = self.worker.results if self.worker else []
-        ok = len(results)
-        total = len(self._parse_accounts())
+        ok = self.acc_mgr.success_count
+        total = self.acc_mgr.total
         self.status_label.setText(f"✅ Hoàn tất: {ok}/{total} thành công")
-        if results:
-            self.upload_btn.setEnabled(True)
-            self.upload_btn.setText(f"📤 Upload {ok} token lên Grok Studio")
-        # Cleanup profiles if checked
-        if self.cleanup_cb.isChecked():
-            accounts = self._parse_accounts()
-            cleaned = 0
-            for email, _ in accounts:
-                _delete_profile(email)
-                cleaned += 1
-            if cleaned:
-                self.log.append(f"\n🗑 Đã xóa {cleaned} Chrome profiles")
+        self._refresh_table()
 
     def upload_tokens(self):
-        if not self.worker or not self.worker.results:
+        cookies = self.acc_mgr.get_success_cookies()
+        if not cookies:
+            QMessageBox.warning(self, "Lỗi", "Không có cookie để upload")
             return
-        tokens = [cookie_str for _, cookie_str in self.worker.results]
         self.upload_btn.setEnabled(False)
         self.upload_btn.setText("Đang upload...")
         try:
-            d = self.api.upload_tokens(tokens)
+            d = self.api.upload_tokens(cookies)
             added = d.get("added", 0)
             errors = d.get("errors", [])
-            self.status_label.setText(f"📤 Upload: {added} token thêm thành công" + (f", {len(errors)} lỗi" if errors else ""))
-            self.log.append(f"\n📤 Upload: {added} token thêm thành công")
+            msg = f"📤 Upload: {added} token thêm thành công"
+            if errors:
+                msg += f", {len(errors)} lỗi"
+            self.status_label.setText(msg)
+            self.log.append(f"\n{msg}")
             if errors:
                 for e in errors[:5]:
                     self.log.append(f"   ⚠ {e}")
@@ -1025,86 +1345,109 @@ class MainPage(QWidget):
             QMessageBox.warning(self, "Lỗi", str(e))
         finally:
             self.upload_btn.setEnabled(True)
-            self.upload_btn.setText(f"📤 Upload lên Grok Studio")
+            ok = self.acc_mgr.success_count
+            self.upload_btn.setText(f"📤 Upload {ok} token")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Main Window
+# ═══════════════════════════════════════════════════════════════════════
 class GrokStudioApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"Grok Studio — Cookie Grabber v{APP_VERSION}")
-        self.setMinimumSize(700, 600)
-        self.resize(800, 700)
+        self.setWindowTitle(f"Grok Studio Grabber v{APP_VERSION}")
+        self.setMinimumSize(900, 700)
+        self.resize(1050, 750)
 
         self.api = StudioAPI()
+        self.main_page = None
+        self._active_worker = None
+
+        # Stacked pages
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
         # Login page
         self.login_page = LoginPage(self.api)
-        self.login_page.login_success.connect(self.on_login)
+        self.login_page.login_success.connect(self._on_login)
         self.stack.addWidget(self.login_page)
 
-        # Auto-update check
+        # Check for updates on startup
         self._update_checker = UpdateChecker()
         self._update_checker.update_available.connect(self._on_update_available)
         self._update_checker.start()
 
-    def _on_update_available(self, new_version, download_url):
-        reply = QMessageBox.question(
-            self, "Cập nhật mới",
-            f"Có phiên bản mới: v{new_version} (hiện tại: v{APP_VERSION})\n\nBạn có muốn cập nhật không?",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
-        )
-        if reply == QMessageBox.Yes:
-            self._start_update(new_version, download_url)
-
-    def _start_update(self, new_version, download_url):
-        self._update_dlg = QMessageBox(self)
-        self._update_dlg.setWindowTitle("Đang cập nhật...")
-        self._update_dlg.setText(f"Đang tải v{new_version}... 0%")
-        self._update_dlg.setStandardButtons(QMessageBox.NoButton)
-        self._update_dlg.show()
-
-        self._downloader = UpdateDownloader(download_url, new_version)
-        self._downloader.progress.connect(lambda p: self._update_dlg.setText(f"Đang tải v{new_version}... {p}%"))
-        self._downloader.finished.connect(lambda ok, msg: self._on_update_done(ok, msg))
-        self._downloader.start()
-
-    def _on_update_done(self, success, message):
-        self._update_dlg.close()
-        if success:
-            if message.endswith(".bat"):
-                # Launch update script and exit
-                subprocess.Popen(["cmd", "/c", message], creationflags=0x00000008)  # DETACHED_PROCESS
-                QApplication.quit()
-            else:
-                QMessageBox.information(self, "Cập nhật", message)
-        else:
-            QMessageBox.warning(self, "Lỗi cập nhật", f"Không thể cập nhật: {message}")
-
-    def on_login(self, data):
-        user = data.get("user", {})
+    def _on_login(self, data: dict):
+        user = data.get("user", data)
         self.main_page = MainPage(self.api, user)
         self.stack.addWidget(self.main_page)
         self.stack.setCurrentWidget(self.main_page)
+        # Track worker reference for cleanup
+        self._active_worker = None
+
+    def _on_update_available(self, version: str, url: str):
+        reply = QMessageBox.question(
+            self, "Cập nhật",
+            f"Có phiên bản mới: v{version}\nBạn có muốn tải và cập nhật?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self._start_update(url, version)
+
+    def _start_update(self, url: str, version: str):
+        self._downloader = UpdateDownloader(url, version)
+        self._downloader.finished.connect(self._on_update_done)
+        self._downloader.start()
+
+    def _on_update_done(self, success: bool, info: str):
+        if success and info.endswith(".bat"):
+            # Windows: run update batch script and exit
+            subprocess.Popen(["cmd", "/c", info], creationflags=subprocess.CREATE_NEW_CONSOLE if platform.system() == "Windows" else 0)
+            QApplication.quit()
+        elif success:
+            QMessageBox.information(self, "Cập nhật", info)
+        else:
+            QMessageBox.warning(self, "Lỗi cập nhật", f"Không thể cập nhật: {info}")
+
+    def closeEvent(self, event):
+        """Kill all Chrome processes when closing the app."""
+        # Stop any active grab worker
+        if self.main_page and self.main_page.worker:
+            self.main_page.worker.stop()
+            self.main_page.worker.wait(5000)  # Wait up to 5s for thread to finish
+        # Final cleanup: kill any remaining Chrome with our CDP ports
+        _kill_chrome_procs([])
+        event.accept()
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Entry Point
+# ═══════════════════════════════════════════════════════════════════════
 def main():
+    # Ensure data dirs exist
+    PROFILES_DIR.mkdir(parents=True, exist_ok=True)
+    ACCOUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
     app.setStyleSheet(DARK_STYLE)
 
     # Dark palette
     palette = QPalette()
-    palette.setColor(QPalette.Window, QColor(10, 10, 15))
-    palette.setColor(QPalette.WindowText, QColor(226, 232, 240))
-    palette.setColor(QPalette.Base, QColor(15, 15, 25))
-    palette.setColor(QPalette.Text, QColor(226, 232, 240))
-    palette.setColor(QPalette.Button, QColor(20, 20, 35))
-    palette.setColor(QPalette.ButtonText, QColor(226, 232, 240))
+    palette.setColor(QPalette.Window, QColor("#0a0a0f"))
+    palette.setColor(QPalette.WindowText, QColor("#e2e8f0"))
+    palette.setColor(QPalette.Base, QColor("#0a0a0f"))
+    palette.setColor(QPalette.AlternateBase, QColor("#111118"))
+    palette.setColor(QPalette.Text, QColor("#e2e8f0"))
+    palette.setColor(QPalette.Button, QColor("#1a1a2e"))
+    palette.setColor(QPalette.ButtonText, QColor("#e2e8f0"))
+    palette.setColor(QPalette.Highlight, QColor("#6366f1"))
+    palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
     app.setPalette(palette)
 
     window = GrokStudioApp()
     window.show()
+
     sys.exit(app.exec())
 
 
