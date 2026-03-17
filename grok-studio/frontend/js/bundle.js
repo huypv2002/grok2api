@@ -1692,12 +1692,12 @@ function renderPricing(){
   const exp=CU?.plan_expires?CU.plan_expires.slice(0,10):'';
   const curPlan=CU?.plan||'free';
   const isActive=curPlan!=='free'&&(!exp||exp>=new Date().toISOString().slice(0,10));
-  const planLabel={'month1':'Tháng Starter','month5':'Tháng Pro','month10':'Tháng Business','3month1':'3T Starter','3month5':'3T Pro','3month10':'3T Business','week3':'Tuần Starter','week5':'Tuần Pro','week10':'Tuần Business','month3':'Tháng Starter','unlimited':'Unlimited'}[curPlan]||curPlan;
+  const planLabel={'month1':'Tháng Starter','month5':'Tháng Pro','month10':'Tháng Business','3month1':'3T Starter','3month5':'3T Pro','3month10':'3T Business','cafe30':'☕ Ly Cafe','trial1d':'Dùng thử','week3':'Tuần Starter','week5':'Tuần Pro','week10':'Tuần Business','month3':'Tháng Starter','unlimited':'Unlimited'}[curPlan]||curPlan;
   const curInfo=isActive?`<div class="pr-current glass-card"><div class="pr-cur-badge">✓ Đang sử dụng</div><div class="pr-cur-plan">${planLabel}</div>${exp?`<div class="pr-cur-exp">Hết hạn: <b>${exp}</b></div>`:'<div class="pr-cur-exp">Vĩnh viễn</div>'}</div>`:`<div class="pr-current glass-card" style="border-color:rgba(251,191,36,.2)"><div class="pr-cur-badge" style="background:rgba(251,191,36,.15);color:var(--warn)">⚠ ${curPlan==='free'?'Gói miễn phí':'Hết hạn'}</div><div class="pr-cur-plan">${curPlan==='free'?'Nâng cấp để mở khóa tất cả tính năng':'Gia hạn để tiếp tục sử dụng'}</div></div>`;
-  // Duration tabs + tier cards
   return `<div class="pr-page">
-  <div class="pr-hero"><div class="pr-title">Chọn gói phù hợp</div><div class="pr-sub">Tất cả gói đều Unlimited tạo video & ảnh AI</div></div>
+  <div class="pr-hero"><div class="pr-title">Chọn gói phù hợp</div><div class="pr-sub">Tạo video & ảnh AI không giới hạn sáng tạo</div></div>
   ${curInfo}
+  <div id="pr-promo"></div>
   <div class="pr-tabs">
     <div class="pr-tabs-inner">
       <button class="pr-tab active" onclick="switchPrTab('month',this)">📆 1 Tháng</button>
@@ -1709,7 +1709,7 @@ function renderPricing(){
   <div class="pr-footer"><div class="pr-trust">🔒 Thanh toán an toàn qua chuyển khoản ngân hàng ACB</div></div>
 </div>`;
 }
-const _prPlans={month:[],_3month:[]};
+const _prPlans={month:[],_3month:[],promo:[]};
 let _prDur='month';
 let _prLoaded=false;
 async function _loadPrPlans(){
@@ -1717,6 +1717,7 @@ async function _loadPrPlans(){
   try{const d=await API.getPlans();const sp=d.service_plans||[];
     _prPlans.month=sp.filter(p=>p.duration==='month'&&p.active).map(p=>({id:p.id,tier:p.tier,price:p.price,accs:p.accs,period:p.days+' ngày',pop:!!p.popular,save:p.save_text||''}));
     _prPlans._3month=sp.filter(p=>p.duration==='3month'&&p.active).map(p=>({id:p.id,tier:p.tier,price:p.price,accs:p.accs,period:p.days+' ngày',pop:!!p.popular,save:p.save_text||''}));
+    _prPlans.promo=sp.filter(p=>['trial','cafe'].includes(p.duration)&&p.active);
     _prLoaded=true;
   }catch(e){console.error('Load plans error',e)}
 }
@@ -1757,7 +1758,45 @@ function renderPrCards(){
     </div>`;
   }).join('')+'</div>';
 }
-async function afterPricing(){await _loadPrPlans();renderPrCards()}
+async function afterPricing(){await _loadPrPlans();renderPromoCards();renderPrCards()}
+function renderPromoCards(){
+  const el=document.getElementById('pr-promo');if(!el)return;
+  const promos=_prPlans.promo;if(!promos.length){el.innerHTML='';return}
+  const curPlan=CU?.plan||'free';
+  const exp=CU?.plan_expires?CU.plan_expires.slice(0,10):'';
+  const isActive=curPlan!=='free'&&(!exp||exp>=new Date().toISOString().slice(0,10));
+  el.innerHTML=`<div class="pr-promo-section">
+    <div style="text-align:center;margin-bottom:20px"><span style="background:linear-gradient(135deg,#f59e0b,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:17px;font-weight:700">🔥 Chưa chắc chắn? Thử trước, mua sau</span></div>
+    <div class="pr-promo-grid">${promos.map(p=>{
+      const isCur=isActive&&curPlan===p.id;
+      const isTrial=p.duration==='trial';
+      const isCafe=p.duration==='cafe';
+      const priceK=Math.floor(p.price/1000);
+      const icon=isCafe?'☕':'⚡';
+      const tagline=isCafe
+        ?'Ủng hộ tác giả 1 ly cafe — chạy cả tháng'
+        :'Test thoải mái · Full tốc độ đa luồng';
+      const subtitle=isCafe
+        ?'<div class="pr-promo-sub">Rẻ hơn 1 ly trà đá mỗi ngày. Mỗi ngày 50 video, chạy đều 30 ngày.</div>'
+        :'<div class="pr-promo-sub">Muốn biết tool chạy nhanh cỡ nào? 10k test full, 2 acc chạy song song. Hết 50 video nạp thêm 10k chạy tiếp — không giới hạn lần nạp.</div>';
+      const desc=isCafe
+        ?`<li>✓ Tạo video AI từ text <b>(50 video/ngày)</b></li><li>✓ Tạo ảnh AI không giới hạn</li><li>✓ Ảnh → Video (image2video)</li><li>✓ 1 tài khoản Grok · 30 ngày</li><li style="color:var(--text3)">✕ Không có extend video, image2image</li>`
+        :`<li>✓ <b>Full tính năng</b> — video, ảnh, extend, i2v</li><li>✓ <b>2 tài khoản</b> chạy đa luồng song song</li><li>✓ Batch mode — thấy ngay tốc độ thực tế</li><li>✓ Tối đa <b>50 video</b> / lần nạp</li><li>✓ Hết? <b>Nạp thêm 10k</b> — chạy tiếp ngay</li>`;
+      return `<div class="pr-promo-card${isTrial?' trial':''}${isCafe?' cafe':''}">
+        <div class="pr-promo-icon">${icon}</div>
+        <div class="pr-promo-name">${p.name}</div>
+        <div class="pr-promo-tagline">${tagline}</div>
+        ${subtitle}
+        <div class="pr-promo-price">${priceK}<span class="pr-unit">k</span></div>
+        <div class="pr-promo-period">/ ${p.days} ngày</div>
+        <ul class="pr-features">${desc}</ul>
+        ${isCur
+          ?`<button class="pr-btn current" disabled>✓ Đang sử dụng</button>`
+          :`<button class="pr-btn hot" onclick="buyPlan('${p.id}')">${isTrial?'⚡ Test ngay 10k →':'☕ Ủng hộ ly cafe →'}</button>`}
+      </div>`}).join('')}
+    </div>
+  </div>`;
+}
 
 let _payPollTimer=null;
 async function buyPlan(planId){
@@ -1961,7 +2000,7 @@ async function delSvcPlan(id){if(!confirm('Xóa gói '+id+'?'))return;try{await 
 /* ========== PLAN NAME HELPER ========== */
 let _svcPlanCache=null;
 async function _loadSvcPlanCache(){if(!_svcPlanCache){try{const d=await API.getPlans();_svcPlanCache=d.service_plans||[]}catch{_svcPlanCache=[]}}return _svcPlanCache}
-const PLAN_NAMES={'month1':'Tháng Starter','month5':'Tháng Pro','month10':'Tháng Business','3month1':'3T Starter','3month5':'3T Pro','3month10':'3T Business','free':'Free','unlimited':'Unlimited','week3':'Tuần Starter','week5':'Tuần Pro','week10':'Tuần Business','month3':'Tháng Starter'};
+const PLAN_NAMES={'month1':'Tháng Starter','month5':'Tháng Pro','month10':'Tháng Business','3month1':'3T Starter','3month5':'3T Pro','3month10':'3T Business','cafe30':'☕ Ly Cafe','trial1d':'⚡ Dùng thử','free':'Free','unlimited':'Unlimited','week3':'Tuần Starter','week5':'Tuần Pro','week10':'Tuần Business','month3':'Tháng Starter'};
 function planName(id){return PLAN_NAMES[id]||id||'—'}
 function fmtVND(n){return(n||0).toLocaleString('vi-VN')+'₫'}
 
