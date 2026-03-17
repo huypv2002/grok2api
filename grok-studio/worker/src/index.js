@@ -5,6 +5,7 @@ import { handleHistory } from './routes/history.js';
 import { handlePlans } from './routes/plans.js';
 import { handleAdmin } from './routes/admin.js';
 import { handlePayment, handleWebhook } from './routes/payment.js';
+import { handleAffiliate } from './routes/affiliate.js';
 import { verifyJWT } from './utils/jwt.js';
 import { corsHeaders, jsonResponse } from './utils/response.js';
 
@@ -36,6 +37,21 @@ export default {
       // Public: Web2M webhook (no JWT needed)
       if (path === '/api/webhook/web2m' && request.method === 'POST') {
         return handleWebhook(request, env);
+      }
+
+      // Public: Serve media from R2
+      if (path.startsWith('/api/media/') && request.method === 'GET') {
+        const key = path.replace('/api/media/', '');
+        if (!key || !env.MEDIA) return jsonResponse({ error: 'Not found' }, 404);
+        const obj = await env.MEDIA.get(key);
+        if (!obj) return jsonResponse({ error: 'File not found' }, 404);
+        return new Response(obj.body, {
+          headers: {
+            ...corsHeaders(),
+            'Content-Type': obj.httpMetadata?.contentType || 'application/octet-stream',
+            'Cache-Control': 'public, max-age=31536000, immutable',
+          }
+        });
       }
 
       // Internal API for cf_service — auth by INTERNAL_KEY header
@@ -85,6 +101,9 @@ export default {
       }
       if (path.startsWith('/api/payment/')) {
         return handlePayment(request, env, user, path);
+      }
+      if (path.startsWith('/api/affiliate/')) {
+        return handleAffiliate(request, env, user, path);
       }
 
       // Proxy download — fetch remote media to avoid CORS issues

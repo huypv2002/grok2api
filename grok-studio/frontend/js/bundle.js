@@ -288,7 +288,7 @@ function batchPanel(){
       <button class="btn-s danger" onclick="clearBatch()" id="bclear" style="display:none">🗑 Xóa hết</button>
   `;
   return `<div class="batch-panel glass-card">
-  <div class="bp-header"><span style="font-weight:600;font-size:13px">📋 Batch Mode</span>
+  <div class="bp-header"><span style="font-weight:600;font-size:13px">📋 Chế Độ Hàng Loạt</span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">${importBtns}</div>
   </div>
   ${isImgType?'<div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">💡 TXT+Folder: dòng 1 → ảnh 1, dòng 2 → ảnh 2...<br>Folder tổng: mỗi subfolder chứa ảnh + file .txt cùng tên</div>':''}
@@ -296,7 +296,7 @@ function batchPanel(){
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span style="font-size:12px;color:var(--text2)">⚡ Luồng/acc:</span>
       <select id="bthreads" style="width:60px;padding:4px 6px;font-size:12px"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select>
-      <span style="font-size:12px;color:var(--text2)">🔄 Retry:</span>
+      <span style="font-size:12px;color:var(--text2)">🔄 Thử lại:</span>
       <select id="bretries" style="width:60px;padding:4px 6px;font-size:12px"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select>
       <span id="bworker-info" style="font-size:11px;color:var(--text3)"></span>
     </div>
@@ -323,10 +323,10 @@ function batchPanel(){
 
 function renderPage(p){
   switch(p){
-    case 'text2video':return `<div class="page-title">Text → Video</div><div class="page-sub">Tạo video từ prompt văn bản</div><div class="gen-layout"><div class="gen-left glass-card gen-form"><div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả video... (mỗi dòng = 1 video khi batch)" rows="4"></textarea></div>${vidOpts()}<button class="btn-primary" id="gbtn" onclick="gen('text2video')">Tạo Video</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`;
-    case 'image2video':return `<div class="page-title">Image → Video</div><div class="page-sub">Tạo video từ ảnh</div><div class="gen-layout"><div class="gen-left glass-card gen-form">${uploadHTML()}<div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả chuyển động..."></textarea></div>${vidOpts()}<button class="btn-primary" id="gbtn" onclick="gen('image2video')">Tạo Video</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`;
-    case 'text2image':return `<div class="page-title">Text → Image</div><div class="page-sub">Tạo ảnh từ prompt</div><div class="gen-layout"><div class="gen-left glass-card gen-form"><div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả ảnh... (mỗi dòng = 1 ảnh khi batch)" rows="4"></textarea></div>${imgOpts()}<button class="btn-primary" id="gbtn" onclick="gen('text2image')">Tạo Ảnh</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`;
-    case 'image2image':return `<div class="page-title">Image → Image</div><div class="page-sub">Chỉnh sửa ảnh bằng AI</div><div class="gen-layout"><div class="gen-left glass-card gen-form">${uploadHTML()}<div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả chỉnh sửa..."></textarea></div>${imgOpts()}<button class="btn-primary" id="gbtn" onclick="gen('image2image')">Chuyển đổi</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`;
+    case 'text2video':return `<div class="page-title">Văn Bản → Video</div><div class="page-sub">Tạo video từ prompt văn bản</div><div class="gen-layout"><div class="gen-left glass-card gen-form"><div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả video... (mỗi dòng = 1 video khi chạy hàng loạt)" rows="4"></textarea></div>${vidOpts()}<button class="btn-primary" id="gbtn" onclick="gen('text2video')">Tạo Video</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`;
+    case 'image2video':return `<div class="page-title">Ảnh → Video</div><div class="page-sub">Tạo video từ ảnh</div><div class="gen-layout"><div class="gen-left glass-card gen-form">${uploadHTML()}<div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả chuyển động..."></textarea></div>${vidOpts()}<button class="btn-primary" id="gbtn" onclick="gen('image2video')">Tạo Video</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`;
+    case 'text2image':return `<div class="page-title">Văn Bản → Ảnh</div><div class="page-sub">Tạo ảnh từ prompt</div><div class="gen-layout"><div class="gen-left glass-card gen-form"><div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả ảnh... (mỗi dòng = 1 ảnh khi chạy hàng loạt)" rows="4"></textarea></div>${imgOpts()}<button class="btn-primary" id="gbtn" onclick="gen('text2image')">Tạo Ảnh</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`;
+    case 'image2image':return `<div class="page-title">Ảnh → Ảnh</div><div class="page-sub">Chỉnh sửa ảnh bằng AI</div><div class="gen-layout"><div class="gen-left glass-card gen-form">${uploadHTML()}<div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả chỉnh sửa..."></textarea></div>${imgOpts()}<button class="btn-primary" id="gbtn" onclick="gen('image2image')">Chuyển đổi</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`;
     case 'extend':return renderExtend();
     case 'history':return renderHistory();
     case 'accounts':return renderAccounts();
@@ -337,11 +337,11 @@ function renderPage(p){
     case 'admin-ctv':return renderAdmCTV();case 'admin-comms':return renderAdmComms();case 'admin-bank':return renderAdmBank();
     case 'my-affiliate':return renderMyAffiliate();
     case 'admin-redemptions':return renderAdmRedemptions();
-    default:return '<div class="page-title">Not found</div>';
+    default:return '<div class="page-title">Không tìm thấy</div>';
   }
 }
-function renderExtend(){return `<div class="page-title">Extend Video</div><div class="page-sub">Nối dài video</div><div class="gen-layout"><div class="gen-left glass-card gen-form"><div class="fg"><label>Reference ID</label><input id="g-ref" placeholder="Video reference ID"></div><div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả tiếp theo..."></textarea></div><div class="fg-row"><div class="fg"><label>Start (s)</label><input type="number" id="g-st" value="0" min="0" step="0.1"></div><div class="fg"><label>Thời lượng</label><select id="g-len">${LOPTS}</select></div></div><div class="fg-row"><div class="fg"><label>Tỷ lệ</label><select id="g-ar">${VOPTS}</select></div><div class="fg"><label>Phân giải</label><select id="g-res">${ROPTS}</select></div></div><button class="btn-primary" id="gbtn" onclick="gen('extend_video')">Extend</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`}
-function renderHistory(){return `<div class="page-title">Lịch sử</div><div class="page-sub">Các lần tạo của bạn</div><div class="glass-card" style="padding:12px 16px;margin-bottom:16px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15)"><div style="font-size:13px;font-weight:600;color:var(--warn)">⚠️ Quan trọng: File chỉ lưu trữ trong 24 giờ</div><div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.5">Video và ảnh sẽ tự động bị xóa sau 24h. Hãy tải về máy ngay sau khi tạo xong để không bị mất.</div></div><div id="hstats" style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap"></div><div class="filters" id="hfilters"><button class="fbtn on" onclick="hFilter(null,this)">Tất cả</button><button class="fbtn" onclick="hFilter('text2video',this)">T→V</button><button class="fbtn" onclick="hFilter('image2video',this)">I→V</button><button class="fbtn" onclick="hFilter('text2image',this)">T→I</button><button class="fbtn" onclick="hFilter('image2image',this)">I→I</button><button class="fbtn" onclick="hFilter('extend_video',this)">Ext</button><button class="fbtn" onclick="hFilter('__fav',this)">★ Yêu thích</button><span style="flex:1"></span><button class="btn-s" id="hview-btn" onclick="toggleHView()" title="Đổi kiểu xem">${hViewMode==='grid'?'☰ List':'▦ Grid'}</button><button class="btn-s" id="hsel-btn" onclick="toggleSelectMode()">☐ Chọn</button></div><div class="hfilter-row" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center"><select id="hstatus" onchange="hStatusFilter(this.value)" style="width:auto;padding:6px 10px;font-size:11px"><option value="">Tất cả status</option><option value="completed">✓ Completed</option><option value="failed">✕ Failed</option><option value="processing">⏳ Processing</option></select><input type="date" id="hdate-from" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Từ ngày"><input type="date" id="hdate-to" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Đến ngày"><button class="btn-s" onclick="clearDateFilter()" style="font-size:11px;padding:6px 10px" title="Xóa bộ lọc ngày">✕ Xóa lọc</button></div><div id="hbulk" style="display:none;margin-bottom:12px;gap:8px;flex-wrap:wrap;align-items:center"></div><div class="${hViewMode==='grid'?'hist-grid':'hist-list'}" id="hgrid"></div><div id="lightbox"></div>`}
+function renderExtend(){return `<div class="page-title">Kéo Dài Video</div><div class="page-sub">Nối dài video từ ID tham chiếu</div><div class="gen-layout"><div class="gen-left glass-card gen-form"><div class="fg"><label>ID Tham Chiếu</label><input id="g-ref" placeholder="Nhập ID tham chiếu video"></div><div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả tiếp theo..."></textarea></div><div class="fg-row"><div class="fg"><label>Bắt đầu (s)</label><input type="number" id="g-st" value="0" min="0" step="0.1"></div><div class="fg"><label>Thời lượng</label><select id="g-len">${LOPTS}</select></div></div><div class="fg-row"><div class="fg"><label>Tỷ lệ</label><select id="g-ar">${VOPTS}</select></div><div class="fg"><label>Phân giải</label><select id="g-res">${ROPTS}</select></div></div><button class="btn-primary" id="gbtn" onclick="gen('extend_video')">Kéo Dài</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`}
+function renderHistory(){return `<div class="page-title">Lịch sử</div><div class="page-sub">Các lần tạo của bạn</div><div class="glass-card" style="padding:12px 16px;margin-bottom:16px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15)"><div style="font-size:13px;font-weight:600;color:var(--warn)">⚠️ Quan trọng: File chỉ lưu trữ trong 24 giờ</div><div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.5">Video và ảnh sẽ tự động bị xóa sau 24h. Hãy tải về máy ngay sau khi tạo xong để không bị mất.</div></div><div id="hstats" style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap"></div><div class="filters" id="hfilters"><button class="fbtn on" onclick="hFilter(null,this)">Tất cả</button><button class="fbtn" onclick="hFilter('text2video',this)">T→V</button><button class="fbtn" onclick="hFilter('image2video',this)">I→V</button><button class="fbtn" onclick="hFilter('text2image',this)">T→I</button><button class="fbtn" onclick="hFilter('image2image',this)">I→I</button><button class="fbtn" onclick="hFilter('extend_video',this)">Ext</button><button class="fbtn" onclick="hFilter('__fav',this)">★ Yêu thích</button><span style="flex:1"></span><button class="btn-s" id="hview-btn" onclick="toggleHView()" title="Đổi kiểu xem">${hViewMode==='grid'?'☰ List':'▦ Grid'}</button><button class="btn-s" id="hsel-btn" onclick="toggleSelectMode()">☐ Chọn</button></div><div class="hfilter-row" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center"><select id="hstatus" onchange="hStatusFilter(this.value)" style="width:auto;padding:6px 10px;font-size:11px"><option value="">Tất cả trạng thái</option><option value="completed">✓ Hoàn thành</option><option value="failed">✕ Thất bại</option><option value="processing">⏳ Đang xử lý</option></select><input type="date" id="hdate-from" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Từ ngày"><input type="date" id="hdate-to" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Đến ngày"><button class="btn-s" onclick="clearDateFilter()" style="font-size:11px;padding:6px 10px" title="Xóa bộ lọc ngày">✕ Xóa lọc</button></div><div id="hbulk" style="display:none;margin-bottom:12px;gap:8px;flex-wrap:wrap;align-items:center"></div><div class="${hViewMode==='grid'?'hist-grid':'hist-list'}" id="hgrid"></div><div id="lightbox"></div>`}
 function renderAccounts(){return `<div class="page-title">Cài đặt Token</div><div class="page-sub">Quản lý cookie/token Grok. Dán cookie JSON hoặc SSO token. Video cần cf_clearance.</div><div class="glass-card" id="cf-diag" style="padding:14px 18px;margin-bottom:16px;font-size:12px;color:var(--text2);line-height:1.6"><span class="spin"></span> Đang kiểm tra...</div><div id="acc-limit-info"></div><div class="acc-add"><textarea id="ntok" placeholder='Dán cookie JSON (hỗ trợ nhiều token, mỗi JSON array 1 dòng)&#10;Ví dụ:&#10;[{"name":"sso","value":"xxx",...}]&#10;[{"name":"sso","value":"yyy",...}]' style="min-height:100px;font-size:11px;font-family:monospace"></textarea><div style="display:flex;gap:8px"><input id="nlbl" placeholder="Nhãn (tùy chọn)" style="max-width:160px"><button class="btn-primary" onclick="addAcc()" style="width:auto;padding:11px 20px">Thêm</button></div><div style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.5">💡 Hỗ trợ thêm nhiều token cùng lúc: mỗi cookie JSON array trên 1 dòng, hoặc mỗi SSO token trên 1 dòng.</div></div><div id="acc-bulk-bar" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:10px;gap:8px;flex-wrap:wrap;align-items:center"></div><div id="alist"></div><div id="acc-modal"></div>`}
 
 function afterRender(p){
@@ -377,8 +377,8 @@ async function gen(type){
   const prompt=document.getElementById('g-prompt')?.value?.trim();
   if(!prompt){toast('Nhập prompt','err');return}
   // For image types, need uploaded file
-  if((type==='image2video'||type==='image2image')&&!uploadedFile){toast('Upload ảnh','err');return}
-  if(type==='extend_video'&&!v('g-ref','')){toast('Nhập Reference ID','err');return}
+  if((type==='image2video'||type==='image2image')&&!uploadedFile){toast('Tải ảnh lên','err');return}
+  if(type==='extend_video'&&!v('g-ref','')){toast('Nhập ID tham chiếu','err');return}
   // Add to queue
   const item={id:++_bqId,prompt,status:'pending',url:null,error:null,retries:0,source:'manual'};
   if((type==='image2video'||type==='image2image')&&uploadedFile){item._imgDataUrl=uploadedFile}
@@ -741,7 +741,7 @@ function renderBTab2(done,failed){
       }
     }).join('')+'</div>'+pg;
   }else{
-    el.innerHTML=`<table class="bp-tbl"><thead><tr><th>#</th><th>Prompt</th><th>Status</th><th>Actions</th></tr></thead><tbody>${visible.map((q,i)=>{
+    el.innerHTML=`<table class="bp-tbl"><thead><tr><th>#</th><th>Prompt</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>${visible.map((q,i)=>{
       if(q._ok){
         const su=(q.url||'').replace(/'/g,"\\'");
         const sp=esc(q.prompt).replace(/'/g,"\\'");
@@ -797,7 +797,7 @@ function _renderBTab2Hist(){
       return `<div class="bp-gi" onclick="openLightbox('${su}',${isV},'${sp}')" title="${esc(h.prompt)}">${thumb}<div class="bp-gi-ov">👁</div><div class="bp-gi-bar"><span class="bp-gi-p">${esc(h.prompt)}</span>${h.output_url?`<button class="btn-icon" onclick="event.stopPropagation();dlProxy('${su}','${isV?'video.mp4':'image.jpg'}')">⬇</button>`:''}</div></div>`;
     }).join('')+'</div>'+pg+footer;
   }else{
-    el.innerHTML=`<table class="bp-tbl"><thead><tr><th>#</th><th>Prompt</th><th>Status</th><th>Actions</th></tr></thead><tbody>${visible.map((h,i)=>{
+    el.innerHTML=`<table class="bp-tbl"><thead><tr><th>#</th><th>Prompt</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>${visible.map((h,i)=>{
       const su=(h.output_url||'').replace(/'/g,"\\'");
       const sp=esc(h.prompt||'').replace(/'/g,"\\'");
       const isPending=h.status==='processing';
@@ -1165,7 +1165,7 @@ function renderHistGrid(g,items,loadMore){
   }).join('')+(loadMore||'');
 }
 function renderHistList(g,items,loadMore){
-  g.innerHTML=`<div class="glass-card tbl-wrap" style="padding:0"><table class="adm-tbl"><thead><tr>${hSelectMode?'<th style="width:30px">☐</th>':''}<th>Type</th><th>Prompt</th><th>Status</th><th>Ngày</th><th>Actions</th></tr></thead><tbody>${items.map(h=>{
+  g.innerHTML=`<div class="glass-card tbl-wrap" style="padding:0"><table class="adm-tbl"><thead><tr>${hSelectMode?'<th style="width:30px">☐</th>':''}<th>Loại</th><th>Prompt</th><th>Trạng thái</th><th>Ngày</th><th>Thao tác</th></tr></thead><tbody>${items.map(h=>{
     const isV=h.type.includes('video')||h.type==='extend_video';
     const tl={text2video:'T→V',image2video:'I→V',text2image:'T→I',image2image:'I→I',extend_video:'Ext'}[h.type]||h.type;
     const dt=new Date(h.created_at).toLocaleDateString();const fav=h.favorite?'★':'☆';
@@ -1395,7 +1395,7 @@ function _renderAccPage(){
   if(accViewMode==='grid'){
     el.innerHTML=toolbar+`<div class="acc-list">`+visible.map(a=>_renderAccCard(a)).join('')+`</div>`+pg;
   }else{
-    el.innerHTML=toolbar+`<div class="glass-card tbl-wrap" style="padding:0"><table class="adm-tbl"><thead><tr><th style="width:30px"><input type="checkbox" class="acc-cb-all" onchange="accToggleAll(this.checked)" style="display:${_accSelectMode?'inline':'none'};width:14px;height:14px;cursor:pointer"></th><th>Nhãn</th><th>Token</th><th>CF</th><th>Status</th><th>Lần cuối</th><th>Thao tác</th></tr></thead><tbody>`+visible.map(a=>_renderAccRow(a)).join('')+`</tbody></table></div>`+pg;
+    el.innerHTML=toolbar+`<div class="glass-card tbl-wrap" style="padding:0"><table class="adm-tbl"><thead><tr><th style="width:30px"><input type="checkbox" class="acc-cb-all" onchange="accToggleAll(this.checked)" style="display:${_accSelectMode?'inline':'none'};width:14px;height:14px;cursor:pointer"></th><th>Nhãn</th><th>Token</th><th>CF</th><th>Trạng thái</th><th>Lần cuối</th><th>Thao tác</th></tr></thead><tbody>`+visible.map(a=>_renderAccRow(a)).join('')+`</tbody></table></div>`+pg;
   }
 }
 function _renderAccCard(a){
@@ -1517,7 +1517,7 @@ async function loadProfile(){
       <div class="prof-email">${u.email}</div>
       <div class="prof-meta">
         <div class="prof-meta-item"><span class="prof-meta-label">ID</span><span>#${u.id}</span></div>
-        <div class="prof-meta-item"><span class="prof-meta-label">Role</span><span class="badge${u.role==='admin'?' admin':''}">${u.role}</span></div>
+        <div class="prof-meta-item"><span class="prof-meta-label">Vai trò</span><span class="badge${u.role==='admin'?' admin':''}">${u.role}</span></div>
         <div class="prof-meta-item"><span class="prof-meta-label">Tài khoản Grok</span><span>${u.account_count||0}</span></div>
         <div class="prof-meta-item"><span class="prof-meta-label">Ngày tạo</span><span>${u.created_at?new Date(u.created_at).toLocaleDateString():'-'}</span></div>
       </div>`;
@@ -1559,7 +1559,7 @@ function _renderProfPay(){
   const el=document.getElementById('prof-payments');if(!el)return;
   if(!_profPayAll.length){el.innerHTML='<div class="muted" style="padding:10px">Chưa có giao dịch</div>';return}
   const start=_profPayPage*_BP;const visible=_profPayAll.slice(start,start+_BP);
-  el.innerHTML=`<table class="adm-tbl"><thead><tr><th>Gói</th><th>Số tiền</th><th>Status</th><th>Ngày</th></tr></thead><tbody>${visible.map(o=>{
+  el.innerHTML=`<table class="adm-tbl"><thead><tr><th>Gói</th><th>Số tiền</th><th>Trạng thái</th><th>Ngày</th></tr></thead><tbody>${visible.map(o=>{
     const stCls=o.status==='completed'?'color:var(--ok)':o.status==='pending'?'color:var(--warn)':'color:var(--err)';
     return `<tr><td><span class="badge">${planName(o.plan_id)}</span></td><td style="font-weight:600">${fmtVND(o.amount)}</td><td style="${stCls}">${o.status}</td><td class="sm">${o.created_at?new Date(o.created_at).toLocaleDateString():'-'}</td></tr>`;
   }).join('')}</tbody></table>`+_pgHtml(_profPayPage,_profPayAll.length,'_profPayGoPage');
@@ -1692,7 +1692,7 @@ function renderPricing(){
   const exp=CU?.plan_expires?CU.plan_expires.slice(0,10):'';
   const curPlan=CU?.plan||'free';
   const isActive=curPlan!=='free'&&(!exp||exp>=new Date().toISOString().slice(0,10));
-  const planLabel={'month1':'Tháng Starter','month5':'Tháng Pro','month10':'Tháng Business','3month1':'3T Starter','3month5':'3T Pro','3month10':'3T Business','cafe30':'☕ Ly Cafe','trial1d':'Dùng thử','week3':'Tuần Starter','week5':'Tuần Pro','week10':'Tuần Business','month3':'Tháng Starter','unlimited':'Unlimited'}[curPlan]||curPlan;
+  const planLabel={'month1':'Tháng - Cơ Bản','month5':'Tháng - Nâng Cao','month10':'Tháng - Doanh Nghiệp','3month1':'3 Tháng - Cơ Bản','3month5':'3 Tháng - Nâng Cao','3month10':'3 Tháng - Doanh Nghiệp','cafe30':'☕ Ly Cafe','trial1d':'⚡ Dùng Thử','week3':'Tuần - Cơ Bản','week5':'Tuần - Nâng Cao','week10':'Tuần - Doanh Nghiệp','month3':'Tháng - Cơ Bản','unlimited':'Không Giới Hạn'}[curPlan]||curPlan;
   const curInfo=isActive?`<div class="pr-current glass-card"><div class="pr-cur-badge">✓ Đang sử dụng</div><div class="pr-cur-plan">${planLabel}</div>${exp?`<div class="pr-cur-exp">Hết hạn: <b>${exp}</b></div>`:'<div class="pr-cur-exp">Vĩnh viễn</div>'}</div>`:`<div class="pr-current glass-card" style="border-color:rgba(251,191,36,.2)"><div class="pr-cur-badge" style="background:rgba(251,191,36,.15);color:var(--warn)">⚠ ${curPlan==='free'?'Gói miễn phí':'Hết hạn'}</div><div class="pr-cur-plan">${curPlan==='free'?'Nâng cấp để mở khóa tất cả tính năng':'Gia hạn để tiếp tục sử dụng'}</div></div>`;
   return `<div class="pr-page">
   <div class="pr-hero"><div class="pr-title">Chọn gói phù hợp</div><div class="pr-sub">Tạo video & ảnh AI không giới hạn sáng tạo</div></div>
@@ -1745,10 +1745,10 @@ function renderPrCards(){
       <div class="pr-period">/ ${p.period}</div>
       ${p.save?`<div class="pr-save">🎉 ${p.save}</div>`:''}
       <ul class="pr-features">
-        <li>✓ Unlimited tạo video AI</li>
-        <li>✓ Unlimited tạo ảnh AI</li>
-        <li>✓ Image → Video & Extend</li>
-        <li>✓ Batch mode đa luồng</li>
+        <li>✓ Không giới hạn tạo video AI</li>
+        <li>✓ Không giới hạn tạo ảnh AI</li>
+        <li>✓ Ảnh → Video & Kéo dài video</li>
+        <li>✓ Chế độ hàng loạt đa luồng</li>
         <li>✓ <b>${p.accs} tài khoản</b> Grok đồng thời</li>
         <li>✓ Hỗ trợ 24/7</li>
       </ul>
@@ -1780,8 +1780,8 @@ function renderPromoCards(){
         ?'<div class="pr-promo-sub">Rẻ hơn 1 ly trà đá mỗi ngày. Mỗi ngày 50 video, chạy đều 30 ngày.</div>'
         :'<div class="pr-promo-sub">Muốn biết tool chạy nhanh cỡ nào? 10k test full, 2 acc chạy song song. Hết 50 video nạp thêm 10k chạy tiếp — không giới hạn lần nạp.</div>';
       const desc=isCafe
-        ?`<li>✓ Tạo video AI từ text <b>(50 video/ngày)</b></li><li>✓ Tạo ảnh AI không giới hạn</li><li>✓ Ảnh → Video (image2video)</li><li>✓ 1 tài khoản Grok · 30 ngày</li><li style="color:var(--text3)">✕ Không có extend video, image2image</li>`
-        :`<li>✓ <b>Full tính năng</b> — video, ảnh, extend, i2v</li><li>✓ <b>2 tài khoản</b> chạy đa luồng song song</li><li>✓ Batch mode — thấy ngay tốc độ thực tế</li><li>✓ Tối đa <b>50 video</b> / lần nạp</li><li>✓ Hết? <b>Nạp thêm 10k</b> — chạy tiếp ngay</li>`;
+        ?`<li>✓ Tạo video AI từ text <b>(50 video/ngày)</b></li><li>✓ Tạo ảnh AI không giới hạn</li><li>✓ Ảnh → Video (image2video)</li><li>✓ 1 tài khoản Grok · 30 ngày</li><li style="color:var(--text3)">✕ Không có kéo dài video, chỉnh sửa ảnh</li>`
+        :`<li>✓ <b>Đầy đủ tính năng</b> — video, ảnh, extend, i2v</li><li>✓ <b>2 tài khoản</b> chạy đa luồng song song</li><li>✓ Chế độ hàng loạt — thấy ngay tốc độ thực tế</li><li>✓ Tối đa <b>50 video</b> / lần nạp</li><li>✓ Hết? <b>Nạp thêm 10k</b> — chạy tiếp ngay</li>`;
       return `<div class="pr-promo-card${isTrial?' trial':''}${isCafe?' cafe':''}">
         <div class="pr-promo-icon">${icon}</div>
         <div class="pr-promo-name">${p.name}</div>
@@ -1854,11 +1854,11 @@ function closePayModal(){
 function copyText(t){navigator.clipboard.writeText(t).then(()=>toast('Đã copy','ok')).catch(()=>{})}
 
 /* ========== ADMIN PAGES ========== */
-function renderAdmDash(){return `<div class="page-title">Admin Dashboard</div><div class="page-sub">Tổng quan hệ thống</div><div class="stats-grid" id="sgrid"><div class="spin-lg"></div></div><div class="page-sub" style="margin-top:16px">Phân bố Plan</div><div id="pdist" style="display:flex;gap:12px;flex-wrap:wrap"></div>`}
-function renderAdmUsers(){return `<div class="page-title">Quản lý Users</div><div class="page-sub">Tất cả người dùng</div><div class="adm-toolbar"><input id="aus" placeholder="Tìm email/tên..." oninput="debouncedAU()"><select id="aup" onchange="loadAdmUsers()"><option value="">Tất cả Plan</option><option value="free">Free</option><option value="week3">Tuần Starter</option><option value="week5">Tuần Pro</option><option value="week10">Tuần Business</option><option value="month3">Tháng Starter</option><option value="month5">Tháng Pro</option><option value="month10">Tháng Business</option><option value="3month3">3T Starter</option><option value="3month5">3T Pro</option><option value="3month10">3T Business</option><option value="unlimited">Unlimited</option></select><select id="aur" onchange="loadAdmUsers()"><option value="">Tất cả Role</option><option value="user">User</option><option value="admin">Admin</option></select><span style="flex:1"></span><button class="btn-s" onclick="createUserModal()">+ Tạo User</button><button class="btn-s" onclick="bulkCreateModal()">👥 Tạo hàng loạt</button></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>Email</th><th>Tên</th><th>Plan</th><th>Role</th><th>Credits</th><th>Lượt/ngày</th><th>Video/ngày</th><th>Hết hạn</th><th>Actions</th></tr></thead><tbody id="aubody"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div><div id="umodal"></div>`}
-function renderAdmTokens(){return `<div class="page-title">Tất cả SSO Tokens</div><div class="page-sub">Quản lý tài khoản Grok</div><div class="adm-toolbar"><select id="aas" onchange="loadAdmTokens()"><option value="">Tất cả</option><option value="active">Active</option><option value="limited">Limited</option><option value="invalid">Invalid</option></select></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>User</th><th>Nhãn</th><th>Token</th><th>Status</th><th>Lần cuối</th><th>Actions</th></tr></thead><tbody id="aabody"><tr><td colspan="7"><div class="spin-lg"></div></td></tr></tbody></table></div><div id="amodal"></div>`}
-function renderAdmHist(){return `<div class="page-title">Tất cả History</div><div class="page-sub">Lịch sử tạo của mọi user</div><div class="adm-toolbar"><select id="aht" onchange="loadAdmHist()"><option value="">Tất cả</option><option value="text2video">T→V</option><option value="image2video">I→V</option><option value="text2image">T→I</option><option value="image2image">I→I</option><option value="extend_video">Ext</option></select><select id="ahs" onchange="loadAdmHist()"><option value="">Tất cả</option><option value="completed">Completed</option><option value="failed">Failed</option><option value="processing">Processing</option></select></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>User</th><th>Type</th><th>Prompt</th><th>Status</th><th>Ngày</th><th>Output</th></tr></thead><tbody id="ahbody"><tr><td colspan="7"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
-function renderAdmPlans(){return `<div class="page-title">Quản lý Plans</div><div class="page-sub">Cấu hình gói dịch vụ (giá, số acc, thời hạn)</div><div style="margin-bottom:12px"><button class="btn-s" onclick="addSvcPlanModal()">+ Thêm gói mới</button></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>Tên</th><th>Tier</th><th>Thời hạn</th><th>Giá (₫)</th><th>Ngày</th><th>Acc</th><th>Phổ biến</th><th>Active</th><th>Actions</th></tr></thead><tbody id="apbody"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div><div id="pmodal"></div>`}
+function renderAdmDash(){return `<div class="page-title">Tổng Quan Admin</div><div class="page-sub">Tổng quan hệ thống</div><div class="stats-grid" id="sgrid"><div class="spin-lg"></div></div><div class="page-sub" style="margin-top:16px">Phân bố Plan</div><div id="pdist" style="display:flex;gap:12px;flex-wrap:wrap"></div>`}
+function renderAdmUsers(){return `<div class="page-title">Quản lý Users</div><div class="page-sub">Tất cả người dùng</div><div class="adm-toolbar"><input id="aus" placeholder="Tìm email/tên..." oninput="debouncedAU()"><select id="aup" onchange="loadAdmUsers()"><option value="">Tất cả Plan</option><option value="free">Free</option><option value="week3">Tuần Starter</option><option value="week5">Tuần Pro</option><option value="week10">Tuần Business</option><option value="month3">Tháng Starter</option><option value="month5">Tháng Pro</option><option value="month10">Tháng Business</option><option value="3month3">3T Starter</option><option value="3month5">3T Pro</option><option value="3month10">3T Business</option><option value="unlimited">Unlimited</option></select><select id="aur" onchange="loadAdmUsers()"><option value="">Tất cả Role</option><option value="user">User</option><option value="admin">Admin</option></select><span style="flex:1"></span><button class="btn-s" onclick="createUserModal()">+ Tạo User</button><button class="btn-s" onclick="bulkCreateModal()">👥 Tạo hàng loạt</button></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>Email</th><th>Tên</th><th>Plan</th><th>Vai trò</th><th>Credits</th><th>Lượt/ngày</th><th>Video/ngày</th><th>Hết hạn</th><th>Thao tác</th></tr></thead><tbody id="aubody"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div><div id="umodal"></div>`}
+function renderAdmTokens(){return `<div class="page-title">Tất cả SSO Tokens</div><div class="page-sub">Quản lý tài khoản Grok</div><div class="adm-toolbar"><select id="aas" onchange="loadAdmTokens()"><option value="">Tất cả</option><option value="active">Active</option><option value="limited">Limited</option><option value="invalid">Invalid</option></select></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>User</th><th>Nhãn</th><th>Token</th><th>Trạng thái</th><th>Lần cuối</th><th>Thao tác</th></tr></thead><tbody id="aabody"><tr><td colspan="7"><div class="spin-lg"></div></td></tr></tbody></table></div><div id="amodal"></div>`}
+function renderAdmHist(){return `<div class="page-title">Tất cả Lịch Sử</div><div class="page-sub">Lịch sử tạo của mọi user</div><div class="adm-toolbar"><select id="aht" onchange="loadAdmHist()"><option value="">Tất cả</option><option value="text2video">T→V</option><option value="image2video">I→V</option><option value="text2image">T→I</option><option value="image2image">I→I</option><option value="extend_video">Ext</option></select><select id="ahs" onchange="loadAdmHist()"><option value="">Tất cả</option><option value="completed">Hoàn thành</option><option value="failed">Thất bại</option><option value="processing">Đang xử lý</option></select></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>User</th><th>Loại</th><th>Prompt</th><th>Trạng thái</th><th>Ngày</th><th>Output</th></tr></thead><tbody id="ahbody"><tr><td colspan="7"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
+function renderAdmPlans(){return `<div class="page-title">Quản lý Gói Dịch Vụ</div><div class="page-sub">Cấu hình gói dịch vụ (giá, số acc, thời hạn)</div><div style="margin-bottom:12px"><button class="btn-s" onclick="addSvcPlanModal()">+ Thêm gói mới</button></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>Tên</th><th>Tier</th><th>Thời hạn</th><th>Giá (₫)</th><th>Ngày</th><th>Acc</th><th>Phổ biến</th><th>Active</th><th>Thao tác</th></tr></thead><tbody id="apbody"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div><div id="pmodal"></div>`}
 
 /* ========== ADMIN LOADERS ========== */
 async function loadAdmStats(){
@@ -1891,7 +1891,7 @@ function _renderAdmUsersPage(){
 function editUserModal(u){
   const id=u.id,email=u.email,name=u.name||'',plan=u.plan,role=u.role||'user',credits=u.credits,dl=u.daily_limit??-1,vl=u.video_limit??-1,exp=u.plan_expires||'';
   const planOpts=Object.entries(PLAN_NAMES).map(([k,v])=>`<option value="${k}"${plan===k?' selected':''}>${v}</option>`).join('');
-  document.getElementById('umodal').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal('umodal')"><div class="glass-card modal"><div class="modal-title">Sửa User</div><div style="font-size:13px;color:var(--text2);margin-bottom:16px">${email}</div><div class="fg"><label>Tên</label><input id="eu-name" value="${name}"></div><div class="fg-row"><div class="fg"><label>Plan</label><select id="eu-plan">${planOpts}</select></div><div class="fg"><label>Role</label><select id="eu-role"><option value="user"${role==='user'?' selected':''}>User</option><option value="admin"${role==='admin'?' selected':''}>Admin</option></select></div></div><div class="fg"><label>Credits (-1=∞)</label><input type="number" id="eu-credits" value="${credits}"></div><div class="fg-row"><div class="fg"><label>Lượt/ngày (-1=theo plan)</label><input type="number" id="eu-daily" value="${dl}"></div><div class="fg"><label>Video/ngày (-1=theo plan)</label><input type="number" id="eu-video" value="${vl}"></div></div><div class="fg"><label>Hết hạn gói (để trống = vĩnh viễn)</label><input type="date" id="eu-expires" value="${exp?exp.slice(0,10):''}"></div><div class="fg"><label>Mật khẩu mới</label><input type="password" id="eu-pw" placeholder="Để trống nếu không đổi"></div><div class="modal-acts"><button class="btn-s" onclick="closeModal('umodal')">Hủy</button><button class="btn-primary" style="padding:10px 20px" onclick="saveUser(${id})">Lưu</button></div></div></div>`;
+  document.getElementById('umodal').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal('umodal')"><div class="glass-card modal"><div class="modal-title">Sửa User</div><div style="font-size:13px;color:var(--text2);margin-bottom:16px">${email}</div><div class="fg"><label>Tên</label><input id="eu-name" value="${name}"></div><div class="fg-row"><div class="fg"><label>Plan</label><select id="eu-plan">${planOpts}</select></div><div class="fg"><label>Vai trò</label><select id="eu-role"><option value="user"${role==='user'?' selected':''}>User</option><option value="admin"${role==='admin'?' selected':''}>Admin</option></select></div></div><div class="fg"><label>Credits (-1=∞)</label><input type="number" id="eu-credits" value="${credits}"></div><div class="fg-row"><div class="fg"><label>Lượt/ngày (-1=theo plan)</label><input type="number" id="eu-daily" value="${dl}"></div><div class="fg"><label>Video/ngày (-1=theo plan)</label><input type="number" id="eu-video" value="${vl}"></div></div><div class="fg"><label>Hết hạn gói (để trống = vĩnh viễn)</label><input type="date" id="eu-expires" value="${exp?exp.slice(0,10):''}"></div><div class="fg"><label>Mật khẩu mới</label><input type="password" id="eu-pw" placeholder="Để trống nếu không đổi"></div><div class="modal-acts"><button class="btn-s" onclick="closeModal('umodal')">Hủy</button><button class="btn-primary" style="padding:10px 20px" onclick="saveUser(${id})">Lưu</button></div></div></div>`;
 }
 async function saveUser(id){const d={name:document.getElementById('eu-name').value,plan:document.getElementById('eu-plan').value,role:document.getElementById('eu-role').value,credits:+document.getElementById('eu-credits').value,daily_limit:+document.getElementById('eu-daily').value,video_limit:+document.getElementById('eu-video').value,plan_expires:document.getElementById('eu-expires').value||null};const pw=document.getElementById('eu-pw').value;if(pw)d.password=pw;try{await API.adm.updUser(id,d);toast('Đã cập nhật','ok');closeModal('umodal');loadAdmUsers()}catch(e){toast(e.message,'err')}}
 async function adminDelUser(id){if(!confirm('Xóa user này và tất cả dữ liệu?'))return;try{await API.adm.delUser(id);toast('Đã xóa','ok');loadAdmUsers()}catch(e){toast(e.message,'err')}}
@@ -1899,7 +1899,7 @@ async function adminDelUser(id){if(!confirm('Xóa user này và tất cả dữ 
 /* ========== CREATE USER MODAL ========== */
 function createUserModal(){
   const planOpts=Object.entries(PLAN_NAMES).map(([k,v])=>`<option value="${k}"${k==='free'?' selected':''}>${v}</option>`).join('');
-  document.getElementById('umodal').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal('umodal')"><div class="glass-card modal"><div class="modal-title">Tạo User Mới</div><div class="fg"><label>Email</label><input id="cu-email" placeholder="user@example.com"></div><div class="fg"><label>Mật khẩu</label><input type="password" id="cu-pw" placeholder="Mật khẩu"></div><div class="fg"><label>Tên</label><input id="cu-name" placeholder="Tên (tùy chọn)"></div><div class="fg-row"><div class="fg"><label>Plan</label><select id="cu-plan">${planOpts}</select></div><div class="fg"><label>Role</label><select id="cu-role"><option value="user">User</option><option value="admin">Admin</option></select></div></div><div class="fg"><label>Credits (-1=∞)</label><input type="number" id="cu-credits" value="10"></div><div class="fg-row"><div class="fg"><label>Lượt/ngày (-1=theo plan)</label><input type="number" id="cu-daily" value="-1"></div><div class="fg"><label>Video/ngày (-1=theo plan)</label><input type="number" id="cu-video" value="-1"></div></div><div class="fg"><label>Hết hạn gói (để trống = vĩnh viễn)</label><input type="date" id="cu-expires"></div><div class="modal-acts"><button class="btn-s" onclick="closeModal('umodal')">Hủy</button><button class="btn-primary" style="padding:10px 20px" onclick="doCreateUser()">Tạo</button></div></div></div>`;
+  document.getElementById('umodal').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal('umodal')"><div class="glass-card modal"><div class="modal-title">Tạo User Mới</div><div class="fg"><label>Email</label><input id="cu-email" placeholder="user@example.com"></div><div class="fg"><label>Mật khẩu</label><input type="password" id="cu-pw" placeholder="Mật khẩu"></div><div class="fg"><label>Tên</label><input id="cu-name" placeholder="Tên (tùy chọn)"></div><div class="fg-row"><div class="fg"><label>Plan</label><select id="cu-plan">${planOpts}</select></div><div class="fg"><label>Vai trò</label><select id="cu-role"><option value="user">User</option><option value="admin">Admin</option></select></div></div><div class="fg"><label>Credits (-1=∞)</label><input type="number" id="cu-credits" value="10"></div><div class="fg-row"><div class="fg"><label>Lượt/ngày (-1=theo plan)</label><input type="number" id="cu-daily" value="-1"></div><div class="fg"><label>Video/ngày (-1=theo plan)</label><input type="number" id="cu-video" value="-1"></div></div><div class="fg"><label>Hết hạn gói (để trống = vĩnh viễn)</label><input type="date" id="cu-expires"></div><div class="modal-acts"><button class="btn-s" onclick="closeModal('umodal')">Hủy</button><button class="btn-primary" style="padding:10px 20px" onclick="doCreateUser()">Tạo</button></div></div></div>`;
 }
 async function doCreateUser(){
   const email=document.getElementById('cu-email')?.value?.trim();
@@ -1939,10 +1939,10 @@ function _renderAdmTokensPage(){
   const body=document.getElementById('aabody');if(!body)return;
   if(!_aaAll.length){body.innerHTML='<tr><td colspan="7" class="muted">Không có</td></tr>';return}
   const start=_aaPage*_BP;const visible=_aaAll.slice(start,start+_BP);
-  body.innerHTML=visible.map(a=>`<tr><td>${a.id}</td><td class="sm">${a.user_email}</td><td>${a.label||'-'}</td><td class="mono sm">${a.token_preview}</td><td><span class="acc-status ${a.status}">${a.status}</span></td><td class="sm">${a.last_used?new Date(a.last_used).toLocaleString():'Never'}</td><td class="acts"><button class="btn-s" onclick="editAccModal(${a.id},'${(a.label||'').replace(/'/g,"\\'")}','${a.status}')">Sửa</button><button class="btn-s danger" onclick="adminDelAcc(${a.id})">Xóa</button></td></tr>`).join('');
+  body.innerHTML=visible.map(a=>`<tr><td>${a.id}</td><td class="sm">${a.user_email}</td><td>${a.label||'-'}</td><td class="mono sm">${a.token_preview}</td><td><span class="acc-status ${a.status}">${a.status}</span></td><td class="sm">${a.last_used?new Date(a.last_used).toLocaleString():'Chưa dùng'}</td><td class="acts"><button class="btn-s" onclick="editAccModal(${a.id},'${(a.label||'').replace(/'/g,"\\'")}','${a.status}')">Sửa</button><button class="btn-s danger" onclick="adminDelAcc(${a.id})">Xóa</button></td></tr>`).join('');
   const pg=body.closest('.tbl-wrap');if(pg){let pgDiv=pg.nextElementSibling;if(!pgDiv||!pgDiv.classList.contains('aa-pg')){pgDiv=document.createElement('div');pgDiv.className='aa-pg';pg.after(pgDiv)}pgDiv.innerHTML=_pgHtml(_aaPage,_aaAll.length,'_aaGoPage')}
 }
-function editAccModal(id,label,status){document.getElementById('amodal').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal('amodal')"><div class="glass-card modal"><div class="modal-title">Sửa Account</div><div class="fg"><label>Nhãn</label><input id="ea-label" value="${label}"></div><div class="fg"><label>Status</label><select id="ea-status"><option value="active"${status==='active'?' selected':''}>Active</option><option value="limited"${status==='limited'?' selected':''}>Limited</option><option value="invalid"${status==='invalid'?' selected':''}>Invalid</option></select></div><div class="modal-acts"><button class="btn-s" onclick="closeModal('amodal')">Hủy</button><button class="btn-primary" style="padding:10px 20px" onclick="saveAcc(${id})">Lưu</button></div></div></div>`}
+function editAccModal(id,label,status){document.getElementById('amodal').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal('amodal')"><div class="glass-card modal"><div class="modal-title">Sửa Account</div><div class="fg"><label>Nhãn</label><input id="ea-label" value="${label}"></div><div class="fg"><label>Trạng thái</label><select id="ea-status"><option value="active"${status==='active'?' selected':''}>Active</option><option value="limited"${status==='limited'?' selected':''}>Limited</option><option value="invalid"${status==='invalid'?' selected':''}>Invalid</option></select></div><div class="modal-acts"><button class="btn-s" onclick="closeModal('amodal')">Hủy</button><button class="btn-primary" style="padding:10px 20px" onclick="saveAcc(${id})">Lưu</button></div></div></div>`}
 async function saveAcc(id){try{await API.adm.updAcc(id,{label:document.getElementById('ea-label').value,status:document.getElementById('ea-status').value});toast('Đã cập nhật','ok');closeModal('amodal');loadAdmTokens()}catch(e){toast(e.message,'err')}}
 async function adminDelAcc(id){if(!confirm('Xóa SSO token này?'))return;try{await API.adm.delAcc(id);toast('Đã xóa','ok');loadAdmTokens()}catch(e){toast(e.message,'err')}}
 
@@ -2000,7 +2000,7 @@ async function delSvcPlan(id){if(!confirm('Xóa gói '+id+'?'))return;try{await 
 /* ========== PLAN NAME HELPER ========== */
 let _svcPlanCache=null;
 async function _loadSvcPlanCache(){if(!_svcPlanCache){try{const d=await API.getPlans();_svcPlanCache=d.service_plans||[]}catch{_svcPlanCache=[]}}return _svcPlanCache}
-const PLAN_NAMES={'month1':'Tháng Starter','month5':'Tháng Pro','month10':'Tháng Business','3month1':'3T Starter','3month5':'3T Pro','3month10':'3T Business','cafe30':'☕ Ly Cafe','trial1d':'⚡ Dùng thử','free':'Free','unlimited':'Unlimited','week3':'Tuần Starter','week5':'Tuần Pro','week10':'Tuần Business','month3':'Tháng Starter'};
+const PLAN_NAMES={'month1':'Tháng - Cơ Bản','month5':'Tháng - Nâng Cao','month10':'Tháng - Doanh Nghiệp','3month1':'3 Tháng - Cơ Bản','3month5':'3 Tháng - Nâng Cao','3month10':'3 Tháng - Doanh Nghiệp','cafe30':'☕ Ly Cafe','trial1d':'⚡ Dùng Thử','free':'Miễn Phí','unlimited':'Không Giới Hạn','week3':'Tuần - Cơ Bản','week5':'Tuần - Nâng Cao','week10':'Tuần - Doanh Nghiệp','month3':'Tháng - Cơ Bản'};
 function planName(id){return PLAN_NAMES[id]||id||'—'}
 function fmtVND(n){return(n||0).toLocaleString('vi-VN')+'₫'}
 
@@ -2008,12 +2008,12 @@ function fmtVND(n){return(n||0).toLocaleString('vi-VN')+'₫'}
 function renderAdmPay(){return `<div class="page-title">Quản lý Giao dịch</div><div class="page-sub">Tất cả đơn thanh toán</div>
 <div class="stats-grid" id="pay-stats"><div class="spin-lg"></div></div>
 <div class="adm-toolbar" style="margin-top:16px">
-  <select id="ap-status" onchange="loadAdmPay()"><option value="">Tất cả status</option><option value="pending">Pending</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select>
+  <select id="ap-status" onchange="loadAdmPay()"><option value="">Tất cả trạng thái</option><option value="pending">Chờ xử lý</option><option value="completed">Hoàn thành</option><option value="cancelled">Đã hủy</option></select>
   <input type="date" id="ap-from" onchange="loadAdmPay()" title="Từ ngày">
   <input type="date" id="ap-to" onchange="loadAdmPay()" title="Đến ngày">
   <button class="btn-s" onclick="document.getElementById('ap-status').value='';document.getElementById('ap-from').value='';document.getElementById('ap-to').value='';loadAdmPay()">✕ Xóa lọc</button>
 </div>
-<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>User</th><th>Gói</th><th>Số tiền</th><th>Mã CK</th><th>Status</th><th>Ngày tạo</th><th>Hoàn thành</th><th>Actions</th></tr></thead><tbody id="apbody"><tr><td colspan="9"><div class="spin-lg"></div></td></tr></tbody></table></div>
+<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>User</th><th>Gói</th><th>Số tiền</th><th>Mã CK</th><th>Trạng thái</th><th>Ngày tạo</th><th>Hoàn thành</th><th>Thao tác</th></tr></thead><tbody id="apbody"><tr><td colspan="9"><div class="spin-lg"></div></td></tr></tbody></table></div>
 <div id="paymodal"></div>`}
 
 async function loadAdmPay(){
@@ -2050,7 +2050,7 @@ function _renderAdmPayPage(){
         <td><span class="badge">${planName(o.plan_id)}</span></td>
         <td style="font-weight:600">${fmtVND(o.amount)}</td>
         <td class="mono sm">${o.memo_code||''}</td>
-        <td style="${stCls};font-weight:600">${o.status}</td>
+        <td style="${stCls};font-weight:600">${{completed:'Hoàn thành',pending:'Chờ xử lý',cancelled:'Đã hủy'}[o.status]||o.status}</td>
         <td class="sm">${dt}</td>
         <td class="sm">${ct}</td>
         <td class="acts">${o.status==='pending'?`<button class="btn-s" onclick="approvePay(${o.id})" style="color:var(--ok)">✓ Duyệt</button>`:''}${CU?.role==='superadmin'?`<button class="btn-s danger" onclick="deletePay(${o.id})">Xóa</button>`:''}</td>
@@ -2073,7 +2073,7 @@ function renderAdmCTV(){return `<div class="page-title">Quản lý CTV</div><div
   <button class="btn-s" onclick="addCTVModal()">+ Thêm CTV</button>
   <button class="btn-s" onclick="go('admin-comms')">📊 Lịch sử hoa hồng</button>
 </div>
-<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>Email</th><th>Tên</th><th>Mã ref</th><th>Hoa hồng %</th><th>Referrals</th><th>Tổng HH</th><th>Chờ TT</th><th>Đã TT</th><th>Actions</th></tr></thead><tbody id="ctv-body"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div>
+<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>Email</th><th>Tên</th><th>Mã ref</th><th>Hoa hồng %</th><th>Referrals</th><th>Tổng HH</th><th>Chờ TT</th><th>Đã TT</th><th>Thao tác</th></tr></thead><tbody id="ctv-body"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div>
 <div id="ctv-modal"></div>`}
 
 async function loadAdmCTV(){
@@ -2159,7 +2159,7 @@ function renderAdmComms(){return `<div class="page-title">Lịch sử Hoa hồng
   <button class="btn-s" onclick="go('admin-ctv')">← Quay lại CTV</button>
   <button class="btn-s" onclick="go('admin-redemptions')">🎁 Yêu cầu đổi thưởng</button>
 </div>
-<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>CTV</th><th>Người mua</th><th>Đơn hàng</th><th>Giá trị</th><th>Hoa hồng</th><th>%</th><th>Status</th><th>Ngày</th><th>Actions</th></tr></thead><tbody id="cm-body"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
+<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>CTV</th><th>Người mua</th><th>Đơn hàng</th><th>Giá trị</th><th>Hoa hồng</th><th>%</th><th>Trạng thái</th><th>Ngày</th><th>Thao tác</th></tr></thead><tbody id="cm-body"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
 
 async function loadAdmComms(){
   try{
@@ -2270,7 +2270,7 @@ function renderAdmRedemptions(){return `<div class="page-title">🎁 Yêu cầu 
   <select id="rd-status" onchange="loadAdmRedemptions()"><option value="">Tất cả</option><option value="pending">Chờ duyệt</option><option value="approved">Đã duyệt</option><option value="rejected">Từ chối</option></select>
   <button class="btn-s" onclick="go('admin-comms')">← Hoa hồng</button>
 </div>
-<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>CTV</th><th>Loại</th><th>Số tiền</th><th>Ngày thêm</th><th>Status</th><th>Ngày tạo</th><th>Ghi chú</th><th>Actions</th></tr></thead><tbody id="rd-body"><tr><td colspan="9"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
+<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>CTV</th><th>Loại</th><th>Số tiền</th><th>Ngày thêm</th><th>Trạng thái</th><th>Ngày tạo</th><th>Ghi chú</th><th>Thao tác</th></tr></thead><tbody id="rd-body"><tr><td colspan="9"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
 
 async function loadAdmRedemptions(){
   try{
@@ -2389,7 +2389,7 @@ async function loadMyAffiliate(){
     const re=document.getElementById('aff-redemptions');
     if(re){
       if(!d.redemptions.length){re.innerHTML='<div class="muted" style="padding:10px">Chưa có yêu cầu đổi thưởng</div>'}
-      else{re.innerHTML=`<table class="adm-tbl"><thead><tr><th>Loại</th><th>Số tiền</th><th>Ngày thêm</th><th>Status</th><th>Ngày tạo</th></tr></thead><tbody>${d.redemptions.map(r=>{
+      else{re.innerHTML=`<table class="adm-tbl"><thead><tr><th>Loại</th><th>Số tiền</th><th>Ngày thêm</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead><tbody>${d.redemptions.map(r=>{
         const typeBadge=r.type==='days'?'📅 Ngày':'💰 Tiền';
         const stCls=r.status==='approved'?'color:var(--ok)':r.status==='rejected'?'color:var(--err)':'color:var(--warn)';
         const stTxt=r.status==='approved'?'✓ Duyệt':r.status==='rejected'?'✕ Từ chối':'⏳ Chờ';
@@ -2407,7 +2407,7 @@ function _renderMyAffComms(){
   const ce=document.getElementById('aff-comms');if(!ce)return;
   if(!_myAffComms.length){ce.innerHTML='<div class="muted" style="padding:10px">Chưa có hoa hồng</div>';return}
   const start=_myAffCommsPage*_BP;const visible=_myAffComms.slice(start,start+_BP);
-  ce.innerHTML=`<table class="adm-tbl"><thead><tr><th>Người mua</th><th>Giá trị</th><th>Hoa hồng</th><th>Status</th><th>Ngày</th></tr></thead><tbody>${visible.map(c=>{
+  ce.innerHTML=`<table class="adm-tbl"><thead><tr><th>Người mua</th><th>Giá trị</th><th>Hoa hồng</th><th>Trạng thái</th><th>Ngày</th></tr></thead><tbody>${visible.map(c=>{
     const stBadge=c.status==='paid'?'<span style="color:var(--ok)">✓ Đã TT</span>':'<span style="color:var(--warn)">⏳ Chờ</span>';
     return `<tr><td class="sm">${c.buyer_email}</td><td>${fmtVND(c.amount)}</td><td style="font-weight:600;color:var(--ok)">${fmtVND(c.commission)}</td><td>${stBadge}</td><td class="sm">${c.created_at?c.created_at.slice(0,10):'-'}</td></tr>`}).join('')}</tbody></table>`+_pgHtml(_myAffCommsPage,_myAffComms.length,'_myAffCommsGoPage');
 }

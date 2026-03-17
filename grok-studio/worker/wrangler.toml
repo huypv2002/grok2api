@@ -10,12 +10,19 @@ routes = [
 JWT_SECRET = "gkS!9xR#mP2vL@7nQ4wZ8jY0bT5cF3hA"
 GROK_API_BASE = "https://api.liveyt.pro"
 INTERNAL_KEY = "cf-sync-k8X#pQ2mR7vL@9nZ"
-WEB2M_TOKEN = "307ed7577fbe3a9acbb459dbfb0ee4822735ccf5e0c9afef09991848aa12a64e"
+WEB2M_TOKEN = "3c0bdb295f34345a8bf920572d3c15f2d741a48cb8122465ef31f5dae3ad3876"
+ACB_ACCOUNT = "24876591"
+ACB_PASSWORD = "0822@996v"
+ACB_API_TOKEN = "6D5E9F6A-8008-6F14-D8B9-8B98CB9D0FB4"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "grok-studio-db"
 database_id = "d49b933b-c96d-4979-a06a-7b867dd725ee"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "grok-studio-media"
 
 [assets]
 directory = "../frontend"

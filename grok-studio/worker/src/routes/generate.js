@@ -1,6 +1,28 @@
 import { jsonResponse } from '../utils/response.js';
 
 const GROK2API_KEY = 'grok2api';
+
+// ── Save media to R2 for permanent storage ──
+async function saveToR2(env, outputUrl, type, historyId) {
+  try {
+    const isVideo = type.includes('video') || type === 'extend_video';
+    const ext = isVideo ? 'mp4' : 'jpg';
+    const key = `media/${historyId}.${ext}`;
+
+    const resp = await fetch(outputUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!resp.ok) return null;
+
+    const contentType = resp.headers.get('content-type') || (isVideo ? 'video/mp4' : 'image/jpeg');
+    await env.MEDIA.put(key, resp.body, {
+      httpMetadata: { contentType },
+    });
+
+    return `/api/media/${key}`;
+  } catch (e) {
+    console.error('R2 save failed:', e.message);
+    return null;
+  }
+}
 // UA must match the one used by zendriver to get cf_clearance
 const CF_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36';
 
@@ -509,13 +531,20 @@ export async function handleGenerate(request, env, user) {
       return jsonResponse({ error: 'Generation returned no output.' }, 502);
     }
 
+    // Save to R2 for permanent storage (Grok deletes files after a few hours)
+    let permanentUrl = outputUrl;
+    if (env.MEDIA) {
+      const r2Url = await saveToR2(env, outputUrl, type, historyId);
+      if (r2Url) permanentUrl = r2Url;
+    }
+
     await env.DB.prepare(
       "UPDATE history SET status = 'completed', output_url = ?, completed_at = datetime('now') WHERE id = ?"
-    ).bind(outputUrl, historyId).run();
+    ).bind(permanentUrl, historyId).run();
     await deductCredit(env, userId);
     await env.DB.prepare("UPDATE grok_accounts SET last_used = datetime('now') WHERE id = ? AND user_id = ?").bind(account.id, userId).run();
 
-    return jsonResponse({ success: true, historyId, outputUrl, accountId: account.id });
+    return jsonResponse({ success: true, historyId, outputUrl: permanentUrl, accountId: account.id });
 
   } catch (err) {
     const msg = err.message || 'Unknown error';

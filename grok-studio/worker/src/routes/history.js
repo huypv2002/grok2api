@@ -64,27 +64,35 @@ export async function handleHistory(request, env, user, path) {
   if (request.method === 'POST' && path === '/api/history/bulk') {
     const { action, ids } = await request.json();
     if (!Array.isArray(ids) || !ids.length) return jsonResponse({ error: 'ids required' }, 400);
-    const placeholders = ids.map(() => '?').join(',');
+
+    // D1 has bind parameter limits — chunk into batches of 80
+    const CHUNK = 80;
+    const chunks = [];
+    for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK));
 
     if (action === 'delete') {
-      await env.DB.prepare(`DELETE FROM history WHERE id IN (${placeholders}) AND user_id = ?`)
-        .bind(...ids, userId).run();
+      const stmts = chunks.map(chunk => {
+        const ph = chunk.map(() => '?').join(',');
+        return env.DB.prepare(`DELETE FROM history WHERE id IN (${ph}) AND user_id = ?`).bind(...chunk, userId);
+      });
+      await env.DB.batch(stmts);
       return jsonResponse({ message: `Deleted ${ids.length} items` });
     }
     if (action === 'favorite') {
-      await env.DB.prepare(`UPDATE history SET favorite = 1 WHERE id IN (${placeholders}) AND user_id = ?`)
-        .bind(...ids, userId).run();
+      const stmts = chunks.map(chunk => {
+        const ph = chunk.map(() => '?').join(',');
+        return env.DB.prepare(`UPDATE history SET favorite = 1 WHERE id IN (${ph}) AND user_id = ?`).bind(...chunk, userId);
+      });
+      await env.DB.batch(stmts);
       return jsonResponse({ message: 'Favorited' });
     }
     if (action === 'unfavorite') {
-      await env.DB.prepare(`UPDATE history SET favorite = 0 WHERE id IN (${placeholders}) AND user_id = ?`)
-        .bind(...ids, userId).run();
+      const stmts = chunks.map(chunk => {
+        const ph = chunk.map(() => '?').join(',');
+        return env.DB.prepare(`UPDATE history SET favorite = 0 WHERE id IN (${ph}) AND user_id = ?`).bind(...chunk, userId);
+      });
+      await env.DB.batch(stmts);
       return jsonResponse({ message: 'Unfavorited' });
-    }
-    // Bulk delete by status (ids ignored, uses status filter)
-    if (action === 'delete_by_status') {
-      const { status } = await request.json().catch(() => ({}));
-      // status already parsed above from the original body, re-read from body
     }
     return jsonResponse({ error: 'Invalid action' }, 400);
   }

@@ -76,9 +76,9 @@ select::-ms-expand{display:none}
 .sidebar-nav::-webkit-scrollbar{width:3px}
 .sidebar-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:2px}
 .nav-section{margin-bottom:10px}
-.nav-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:10px 14px 6px;font-weight:600;white-space:nowrap;overflow:hidden}
+.nav-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:10px 14px 6px;font-weight:600;white-space:nowrap;overflow:hidden}
 .glass-sidebar.collapsed .nav-label{font-size:0;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);margin:0 8px}
-.nav-btn{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border-radius:var(--rs);background:none;border:none;color:var(--text2);font-family:var(--font);font-size:13px;cursor:pointer;transition:all .15s;text-align:left;white-space:nowrap;overflow:hidden}
+.nav-btn{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border-radius:var(--rs);background:none;border:none;color:var(--text2);font-family:var(--font);font-size:14px;cursor:pointer;transition:all .15s;text-align:left;white-space:nowrap;overflow:hidden}
 .nav-btn svg{flex-shrink:0;color:rgba(255,255,255,.4);transition:color .15s}
 .nav-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
 .nav-btn:hover svg{color:rgba(255,255,255,.7)}
@@ -343,8 +343,8 @@ select::-ms-expand{display:none}
   .glass-sidebar.collapsed{width:260px;min-width:260px;padding:18px 12px}
   .glass-sidebar.collapsed .sidebar-logo-text{opacity:1;width:auto}
   .glass-sidebar.collapsed .sidebar-logo{padding:10px 14px;justify-content:flex-start}
-  .glass-sidebar.collapsed .nav-label{font-size:10px;padding:10px 14px 6px;border-bottom:none;margin:0}
-  .glass-sidebar.collapsed .nav-btn{padding:10px 14px;justify-content:flex-start;font-size:13px}
+  .glass-sidebar.collapsed .nav-label{font-size:11px;padding:10px 14px 6px;border-bottom:none;margin:0}
+  .glass-sidebar.collapsed .nav-btn{padding:10px 14px;justify-content:flex-start;font-size:14px}
   .glass-sidebar.collapsed .uinfo{opacity:1;width:auto}
   .glass-sidebar.collapsed .user-bar{padding:10px 14px;justify-content:flex-start}
   .glass-sidebar.collapsed .user-bar .btn-icon{display:inline-flex}
@@ -480,13 +480,13 @@ select::-ms-expand{display:none}
 .pr-promo-card.cafe::before{background:radial-gradient(ellipse at 50% 0%,rgba(245,158,11,.08) 0%,transparent 60%)}
 .pr-promo-card:hover{transform:translateY(-4px);box-shadow:0 16px 40px rgba(0,0,0,.3)}
 .pr-promo-icon{font-size:36px;margin-bottom:8px}
-.pr-promo-name{font-size:17px;font-weight:700;margin-bottom:4px}
-.pr-promo-tagline{font-size:12px;color:var(--text3);margin-bottom:12px;font-style:italic}
+.pr-promo-name{font-size:22px;font-weight:800;margin-bottom:6px}
+.pr-promo-tagline{font-size:14px;color:var(--text2);margin-bottom:10px;font-style:italic;font-weight:500}
 .pr-promo-price{font-size:36px;font-weight:800;letter-spacing:-.02em}
 .pr-promo-card.trial .pr-promo-price{color:#a78bfa}
 .pr-promo-card.cafe .pr-promo-price{color:#f59e0b}
 .pr-promo-period{font-size:12px;color:var(--text3);margin-bottom:12px}
-.pr-promo-sub{font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:14px;padding:0 8px}
+.pr-promo-sub{font-size:12.5px;color:var(--text2);line-height:1.6;margin-bottom:16px;padding:0 4px}
 .pr-promo-card .pr-features{text-align:left;margin:0 auto 16px;max-width:260px}
 @media(max-width:600px){.pr-promo-grid{grid-template-columns:1fr}}
 

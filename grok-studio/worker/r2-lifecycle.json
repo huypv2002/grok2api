@@ -1,0 +1,11 @@
+{
+  "rules": [
+    {
+      "id": "auto-delete-1d",
+      "enabled": true,
+      "conditions": { "prefix": "media/" },
+      "deleteObjectsTransition": { "condition": { "maxAge": 86400, "type": "Age" } },
+      "abortMultipartUploadsTransition": { "condition": { "maxAge": 86400, "type": "Age" } }
+    }
+  ]
+}

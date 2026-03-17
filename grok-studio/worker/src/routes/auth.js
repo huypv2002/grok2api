@@ -35,12 +35,19 @@ export async function handleAuth(request, env, path) {
   }
 
   if (path === '/api/auth/login') {
-    const { email, password, source } = await getBody();
+    const { email, password, source, ref } = await getBody();
     if (!email || !password) return jsonResponse({ error: 'Email and password required' }, 400);
     const user = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
     if (!user) return jsonResponse({ error: 'Invalid credentials' }, 401);
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) return jsonResponse({ error: 'Invalid credentials' }, 401);
+    // If user has no referrer yet and ref code provided, set it
+    if (ref && !user.referred_by) {
+      const affiliate = await env.DB.prepare('SELECT id FROM users WHERE ref_code = ? AND is_affiliate = 1').bind(ref).first();
+      if (affiliate && affiliate.id !== user.id) {
+        await env.DB.prepare("UPDATE users SET referred_by = ?, updated_at = datetime('now') WHERE id = ?").bind(affiliate.id, user.id).run();
+      }
+    }
     // Multi-device: separate sessions for web and tool
     const sessionId = crypto.randomUUID();
     const src = source === 'tool' ? 'tool' : 'web';
