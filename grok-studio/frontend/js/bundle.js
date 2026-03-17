@@ -122,7 +122,7 @@ const API={
   valid(){const t=localStorage.getItem('gs_time');return!!(t&&this.token&&(Date.now()-+t)<864e5)},
   saveU(u){localStorage.setItem('gs_user',JSON.stringify(u))},
   getU(){try{return JSON.parse(localStorage.getItem('gs_user'))}catch{return null}},
-  login:(e,p)=>API.req('/auth/login',{method:'POST',body:JSON.stringify({email:e,password:p})}),
+  login:(e,p,ref)=>API.req('/auth/login',{method:'POST',body:JSON.stringify({email:e,password:p,ref:ref||undefined})}),
   register:(e,p,n,ref)=>API.req('/auth/register',{method:'POST',body:JSON.stringify({email:e,password:p,name:n,ref:ref||undefined})}),
   me:()=>API.req('/auth/me',{method:'POST'}),
   updateProfile:d=>API.req('/auth/profile',{method:'POST',body:JSON.stringify(d)}),
@@ -139,9 +139,11 @@ const API={
   bulkHistory:(action,ids)=>API.req('/history/bulk',{method:'POST',body:JSON.stringify({action,ids})}),
   bulkStatus:(action,status)=>API.req('/history/bulk-status',{method:'POST',body:JSON.stringify({action,status})}),
   getPlans:()=>API.req('/plans'),
-  adm:{stats:()=>API.req('/admin/stats'),users:(q='')=>API.req('/admin/users?'+q),updUser:(id,d)=>API.req('/admin/users/'+id,{method:'PUT',body:JSON.stringify(d)}),delUser:id=>API.req('/admin/users/'+id,{method:'DELETE'}),createUser:d=>API.req('/admin/users',{method:'POST',body:JSON.stringify(d)}),bulkCreate:d=>API.req('/admin/users/bulk',{method:'POST',body:JSON.stringify(d)}),userUsage:id=>API.req('/admin/users/'+id+'/usage'),accounts:(q='')=>API.req('/admin/accounts?'+q),updAcc:(id,d)=>API.req('/admin/accounts/'+id,{method:'PUT',body:JSON.stringify(d)}),delAcc:id=>API.req('/admin/accounts/'+id,{method:'DELETE'}),history:(q='')=>API.req('/admin/history?'+q),updPlan:(id,d)=>API.req('/admin/plans/'+id,{method:'PUT',body:JSON.stringify(d)}),payments:(q='')=>API.req('/admin/payments?'+q),updPay:(id,d)=>API.req('/admin/payments/'+id,{method:'PUT',body:JSON.stringify(d)}),delPay:id=>API.req('/admin/payments/'+id,{method:'DELETE'})},
+  adm:{stats:()=>API.req('/admin/stats'),users:(q='')=>API.req('/admin/users?'+q),updUser:(id,d)=>API.req('/admin/users/'+id,{method:'PUT',body:JSON.stringify(d)}),delUser:id=>API.req('/admin/users/'+id,{method:'DELETE'}),createUser:d=>API.req('/admin/users',{method:'POST',body:JSON.stringify(d)}),bulkCreate:d=>API.req('/admin/users/bulk',{method:'POST',body:JSON.stringify(d)}),userUsage:id=>API.req('/admin/users/'+id+'/usage'),accounts:(q='')=>API.req('/admin/accounts?'+q),updAcc:(id,d)=>API.req('/admin/accounts/'+id,{method:'PUT',body:JSON.stringify(d)}),delAcc:id=>API.req('/admin/accounts/'+id,{method:'DELETE'}),history:(q='')=>API.req('/admin/history?'+q),updPlan:(id,d)=>API.req('/admin/plans/'+id,{method:'PUT',body:JSON.stringify(d)}),payments:(q='')=>API.req('/admin/payments?'+q),updPay:(id,d)=>API.req('/admin/payments/'+id,{method:'PUT',body:JSON.stringify(d)}),delPay:id=>API.req('/admin/payments/'+id,{method:'DELETE'}),svcPlans:()=>API.req('/admin/service-plans'),updSvcPlan:(id,d)=>API.req('/admin/service-plans/'+id,{method:'PUT',body:JSON.stringify(d)}),addSvcPlan:d=>API.req('/admin/service-plans',{method:'POST',body:JSON.stringify(d)}),delSvcPlan:id=>API.req('/admin/service-plans/'+id,{method:'DELETE'})},
   pay:{create:plan_id=>API.req('/payment/create',{method:'POST',body:JSON.stringify({plan_id})}),check:memo_code=>API.req('/payment/check',{method:'POST',body:JSON.stringify({memo_code})}),confirm:(memo_code,transaction_id,amount)=>API.req('/payment/confirm',{method:'POST',body:JSON.stringify({memo_code,transaction_id,amount})}),history:()=>API.req('/payment/history')},
-  aff:{list:()=>API.req('/admin/affiliates'),add:d=>API.req('/admin/affiliates',{method:'POST',body:JSON.stringify(d)}),upd:(id,d)=>API.req('/admin/affiliates/'+id,{method:'PUT',body:JSON.stringify(d)}),del:id=>API.req('/admin/affiliates/'+id,{method:'DELETE'}),comms:(q='')=>API.req('/admin/commissions?'+q),updComm:(id,d)=>API.req('/admin/commissions/'+id,{method:'PUT',body:JSON.stringify(d)}),payAll:id=>API.req('/admin/commissions/pay-all',{method:'POST',body:JSON.stringify({affiliate_id:id})})}
+  aff:{list:()=>API.req('/admin/affiliates'),add:d=>API.req('/admin/affiliates',{method:'POST',body:JSON.stringify(d)}),upd:(id,d)=>API.req('/admin/affiliates/'+id,{method:'PUT',body:JSON.stringify(d)}),del:id=>API.req('/admin/affiliates/'+id,{method:'DELETE'}),comms:(q='')=>API.req('/admin/commissions?'+q),updComm:(id,d)=>API.req('/admin/commissions/'+id,{method:'PUT',body:JSON.stringify(d)}),payAll:id=>API.req('/admin/commissions/pay-all',{method:'POST',body:JSON.stringify({affiliate_id:id})}),redemptions:(q='')=>API.req('/admin/redemptions?'+q),updRedemption:(id,d)=>API.req('/admin/redemptions/'+id,{method:'PUT',body:JSON.stringify(d)})},
+  myAff:{dashboard:()=>API.req('/affiliate/dashboard'),redeem:d=>API.req('/affiliate/redeem',{method:'POST',body:JSON.stringify(d)})},
+  bank:{transactions:()=>API.req('/admin/bank-transactions')}
 };
 
 /* ========== APP STATE ========== */
@@ -169,12 +171,12 @@ let accViewMode=localStorage.getItem('gs_accview')||'table'; // 'grid' (cards) o
 
 function toast(m,t='info'){const e=document.getElementById('toast');e.textContent=m;e.className='toast '+t+' show';setTimeout(()=>e.classList.remove('show'),3e3)}
 function toggleAuth(reg){document.getElementById('login-form').classList.toggle('hidden',reg);document.getElementById('register-form').classList.toggle('hidden',!reg);document.getElementById('auth-error').textContent=''}
-async function doLogin(){try{const d=await API.login(document.getElementById('login-email').value,document.getElementById('login-password').value);API.set(d.token);API.saveU(d.user);CU=d.user;enter()}catch(e){document.getElementById('auth-error').textContent=e.message}}
+async function doLogin(){try{const ref=new URLSearchParams(window.location.search).get('ref')||'';const d=await API.login(document.getElementById('login-email').value,document.getElementById('login-password').value,ref);API.set(d.token);API.saveU(d.user);CU=d.user;enter()}catch(e){document.getElementById('auth-error').textContent=e.message}}
 async function doRegister(){try{const ref=new URLSearchParams(window.location.search).get('ref')||'';const d=await API.register(document.getElementById('reg-email').value,document.getElementById('reg-password').value,document.getElementById('reg-name').value,ref);API.set(d.token);API.saveU(d.user);CU=d.user;enter()}catch(e){document.getElementById('auth-error').textContent=e.message}}
 function doLogout(){API.clear();CU=null;document.getElementById('main-screen').classList.remove('active');document.getElementById('auth-screen').classList.add('active')}
 function enter(){
   document.getElementById('auth-screen').classList.remove('active');document.getElementById('main-screen').classList.add('active');
-  if(CU){document.getElementById('uname').textContent=CU.name||CU.email;document.getElementById('uplan').textContent=CU.role==='superadmin'?'⚡ SUPER ADMIN':CU.role==='admin'?'★ ADMIN':planName(CU.plan);document.getElementById('avatar').textContent=(CU.name||CU.email)[0].toUpperCase();const am=document.getElementById('avatar-m');if(am)am.textContent=(CU.name||CU.email)[0].toUpperCase();const as=document.getElementById('admin-section');if(as)as.classList.toggle('hidden',CU.role!=='admin'&&CU.role!=='superadmin');const ss=document.getElementById('superadmin-section');if(ss)ss.classList.toggle('hidden',CU.role!=='superadmin')}
+  if(CU){document.getElementById('uname').textContent=CU.name||CU.email;document.getElementById('uplan').textContent=CU.role==='superadmin'?'⚡ SUPER ADMIN':CU.role==='admin'?'★ ADMIN':planName(CU.plan);document.getElementById('avatar').textContent=(CU.name||CU.email)[0].toUpperCase();const am=document.getElementById('avatar-m');if(am)am.textContent=(CU.name||CU.email)[0].toUpperCase();const as=document.getElementById('admin-section');if(as)as.classList.toggle('hidden',CU.role!=='admin'&&CU.role!=='superadmin');const ss=document.getElementById('superadmin-section');if(ss)ss.classList.toggle('hidden',CU.role!=='superadmin');const afs=document.getElementById('affiliate-section');if(afs)afs.classList.toggle('hidden',!CU.is_affiliate)}
   go(CP);
 }
 function go(p){
@@ -332,12 +334,14 @@ function renderPage(p){
     case 'guide':return renderGuide();
     case 'profile':return renderProfile();
     case 'admin-dash':return renderAdmDash();case 'admin-users':return renderAdmUsers();case 'admin-tokens':return renderAdmTokens();case 'admin-hist':return renderAdmHist();case 'admin-plans':return renderAdmPlans();case 'admin-pay':return renderAdmPay();
-    case 'admin-ctv':return renderAdmCTV();case 'admin-comms':return renderAdmComms();
+    case 'admin-ctv':return renderAdmCTV();case 'admin-comms':return renderAdmComms();case 'admin-bank':return renderAdmBank();
+    case 'my-affiliate':return renderMyAffiliate();
+    case 'admin-redemptions':return renderAdmRedemptions();
     default:return '<div class="page-title">Not found</div>';
   }
 }
 function renderExtend(){return `<div class="page-title">Extend Video</div><div class="page-sub">Nối dài video</div><div class="gen-layout"><div class="gen-left glass-card gen-form"><div class="fg"><label>Reference ID</label><input id="g-ref" placeholder="Video reference ID"></div><div class="fg"><label>Prompt</label><textarea id="g-prompt" placeholder="Mô tả tiếp theo..."></textarea></div><div class="fg-row"><div class="fg"><label>Start (s)</label><input type="number" id="g-st" value="0" min="0" step="0.1"></div><div class="fg"><label>Thời lượng</label><select id="g-len">${LOPTS}</select></div></div><div class="fg-row"><div class="fg"><label>Tỷ lệ</label><select id="g-ar">${VOPTS}</select></div><div class="fg"><label>Phân giải</label><select id="g-res">${ROPTS}</select></div></div><button class="btn-primary" id="gbtn" onclick="gen('extend_video')">Extend</button></div><div class="gen-right">${batchPanel()}</div></div><div id="lightbox"></div>`}
-function renderHistory(){return `<div class="page-title">Lịch sử</div><div class="page-sub">Các lần tạo của bạn</div><div id="hstats" style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap"></div><div class="filters" id="hfilters"><button class="fbtn on" onclick="hFilter(null,this)">Tất cả</button><button class="fbtn" onclick="hFilter('text2video',this)">T→V</button><button class="fbtn" onclick="hFilter('image2video',this)">I→V</button><button class="fbtn" onclick="hFilter('text2image',this)">T→I</button><button class="fbtn" onclick="hFilter('image2image',this)">I→I</button><button class="fbtn" onclick="hFilter('extend_video',this)">Ext</button><button class="fbtn" onclick="hFilter('__fav',this)">★ Yêu thích</button><span style="flex:1"></span><button class="btn-s" id="hview-btn" onclick="toggleHView()" title="Đổi kiểu xem">${hViewMode==='grid'?'☰ List':'▦ Grid'}</button><button class="btn-s" id="hsel-btn" onclick="toggleSelectMode()">☐ Chọn</button></div><div class="hfilter-row" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center"><select id="hstatus" onchange="hStatusFilter(this.value)" style="width:auto;padding:6px 10px;font-size:11px"><option value="">Tất cả status</option><option value="completed">✓ Completed</option><option value="failed">✕ Failed</option><option value="processing">⏳ Processing</option></select><input type="date" id="hdate-from" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Từ ngày"><input type="date" id="hdate-to" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Đến ngày"><button class="btn-s" onclick="clearDateFilter()" style="font-size:11px;padding:6px 10px" title="Xóa bộ lọc ngày">✕ Xóa lọc</button></div><div id="hbulk" style="display:none;margin-bottom:12px;gap:8px;flex-wrap:wrap;align-items:center"></div><div class="${hViewMode==='grid'?'hist-grid':'hist-list'}" id="hgrid"></div><div id="lightbox"></div>`}
+function renderHistory(){return `<div class="page-title">Lịch sử</div><div class="page-sub">Các lần tạo của bạn</div><div class="glass-card" style="padding:12px 16px;margin-bottom:16px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15)"><div style="font-size:13px;font-weight:600;color:var(--warn)">⚠️ Quan trọng: File chỉ lưu trữ trong 24 giờ</div><div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.5">Video và ảnh sẽ tự động bị xóa sau 24h. Hãy tải về máy ngay sau khi tạo xong để không bị mất.</div></div><div id="hstats" style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap"></div><div class="filters" id="hfilters"><button class="fbtn on" onclick="hFilter(null,this)">Tất cả</button><button class="fbtn" onclick="hFilter('text2video',this)">T→V</button><button class="fbtn" onclick="hFilter('image2video',this)">I→V</button><button class="fbtn" onclick="hFilter('text2image',this)">T→I</button><button class="fbtn" onclick="hFilter('image2image',this)">I→I</button><button class="fbtn" onclick="hFilter('extend_video',this)">Ext</button><button class="fbtn" onclick="hFilter('__fav',this)">★ Yêu thích</button><span style="flex:1"></span><button class="btn-s" id="hview-btn" onclick="toggleHView()" title="Đổi kiểu xem">${hViewMode==='grid'?'☰ List':'▦ Grid'}</button><button class="btn-s" id="hsel-btn" onclick="toggleSelectMode()">☐ Chọn</button></div><div class="hfilter-row" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center"><select id="hstatus" onchange="hStatusFilter(this.value)" style="width:auto;padding:6px 10px;font-size:11px"><option value="">Tất cả status</option><option value="completed">✓ Completed</option><option value="failed">✕ Failed</option><option value="processing">⏳ Processing</option></select><input type="date" id="hdate-from" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Từ ngày"><input type="date" id="hdate-to" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Đến ngày"><button class="btn-s" onclick="clearDateFilter()" style="font-size:11px;padding:6px 10px" title="Xóa bộ lọc ngày">✕ Xóa lọc</button></div><div id="hbulk" style="display:none;margin-bottom:12px;gap:8px;flex-wrap:wrap;align-items:center"></div><div class="${hViewMode==='grid'?'hist-grid':'hist-list'}" id="hgrid"></div><div id="lightbox"></div>`}
 function renderAccounts(){return `<div class="page-title">Cài đặt Token</div><div class="page-sub">Quản lý cookie/token Grok. Dán cookie JSON hoặc SSO token. Video cần cf_clearance.</div><div class="glass-card" id="cf-diag" style="padding:14px 18px;margin-bottom:16px;font-size:12px;color:var(--text2);line-height:1.6"><span class="spin"></span> Đang kiểm tra...</div><div id="acc-limit-info"></div><div class="acc-add"><textarea id="ntok" placeholder='Dán cookie JSON (hỗ trợ nhiều token, mỗi JSON array 1 dòng)&#10;Ví dụ:&#10;[{"name":"sso","value":"xxx",...}]&#10;[{"name":"sso","value":"yyy",...}]' style="min-height:100px;font-size:11px;font-family:monospace"></textarea><div style="display:flex;gap:8px"><input id="nlbl" placeholder="Nhãn (tùy chọn)" style="max-width:160px"><button class="btn-primary" onclick="addAcc()" style="width:auto;padding:11px 20px">Thêm</button></div><div style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.5">💡 Hỗ trợ thêm nhiều token cùng lúc: mỗi cookie JSON array trên 1 dòng, hoặc mỗi SSO token trên 1 dòng.</div></div><div id="acc-bulk-bar" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:10px;gap:8px;flex-wrap:wrap;align-items:center"></div><div id="alist"></div><div id="acc-modal"></div>`}
 
 function afterRender(p){
@@ -345,7 +349,7 @@ function afterRender(p){
   if(p==='accounts'){loadAcc();runDiag()}
   if(p==='pricing')afterPricing();
   if(p==='profile')loadProfile();
-  if(p==='admin-dash')loadAdmStats();if(p==='admin-users')loadAdmUsers();if(p==='admin-tokens')loadAdmTokens();if(p==='admin-hist')loadAdmHist();if(p==='admin-plans')loadAdmPlans();if(p==='admin-pay')loadAdmPay();if(p==='admin-ctv')loadAdmCTV();if(p==='admin-comms')loadAdmComms();
+  if(p==='admin-dash')loadAdmStats();if(p==='admin-users')loadAdmUsers();if(p==='admin-tokens')loadAdmTokens();if(p==='admin-hist')loadAdmHist();if(p==='admin-plans')loadAdmPlans();if(p==='admin-pay')loadAdmPay();if(p==='admin-ctv')loadAdmCTV();if(p==='admin-comms')loadAdmComms();if(p==='admin-bank')loadAdmBank();if(p==='my-affiliate')loadMyAffiliate();if(p==='admin-redemptions')loadAdmRedemptions();
   // Check token status on gen pages
   const genPages=['text2video','image2video','text2image','image2image','extend'];
   if(genPages.includes(p))_checkAndShowTokenStatus();
@@ -601,6 +605,16 @@ function switchBTab(idx,btn){
 }
 const _BP=50;// items per page
 let _bPage={0:0,1:0,2:0};// current page per tab (0-indexed)
+// Admin pagination state
+let _auAll=[],_auPage=0;// admin users
+let _aaAll=[],_aaPage=0;// admin tokens
+let _ahAll=[],_ahPage=0;// admin history
+let _apAll=[],_apPage=0;// admin payments
+let _acAll=[],_acPage=0;// admin CTV
+let _amAll=[],_amPage=0;// admin commissions
+let _arAll=[],_arPage=0;// admin redemptions
+let _myAffComms=[],_myAffCommsPage=0;// my affiliate commissions
+let _myAffRefs=[],_myAffRefsPage=0;// my affiliate referrals
 
 function _pgHtml(curPage,totalItems,onClickFn){
   const totalPages=Math.ceil(totalItems/_BP);
@@ -628,6 +642,16 @@ function _bqGoPage(page){_bPage[0]=page;renderBatchUI()}
 function _bdGoPage(page){_bPage[2]=page;renderBatchUI()}
 function _histGoPage(page){_histPage=page;_renderHistPage()}
 function _btab2GoPage(page){_btab2Page=page;_renderBTab2Hist()}
+function _auGoPage(p){_auPage=p;_renderAdmUsersPage()}
+function _aaGoPage(p){_aaPage=p;_renderAdmTokensPage()}
+function _ahGoPage(p){_ahPage=p;_renderAdmHistPage()}
+function _apGoPage(p){_apPage=p;_renderAdmPayPage()}
+function _acGoPage(p){_acPage=p;_renderAdmCTVPage()}
+function _amGoPage(p){_amPage=p;_renderAdmCommsPage()}
+function _arGoPage(p){_arPage=p;_renderAdmRedemptionsPage()}
+function _myAffCommsGoPage(p){_myAffCommsPage=p;_renderMyAffComms()}
+function _myAffRefsGoPage(p){_myAffRefsPage=p;_renderMyAffRefs()}
+function _accGoPage(p){_accPage=p;_renderAccPage()}
 
 function renderBTab0(items){
   const el=document.getElementById('btab0');if(!el)return;
@@ -1054,6 +1078,26 @@ async function startBatch(){
   }
   await Promise.all(workers);
 
+  // === AUTO-REQUEUE: move failed items back to pending and re-run with live tokens ===
+  // Up to 3 requeue rounds to handle transient failures
+  for(let rq=1;rq<=3&&!store.stopped;rq++){
+    const liveAccs=_batchAccounts.filter(a=>!_exhaustedAccs.has(a.id));
+    if(!liveAccs.length)break;
+    const failedItems=store.BQ.filter(x=>x.status==='failed');
+    if(!failedItems.length)break;
+    toast(`🔄 Lần ${rq}: ${failedItems.length} prompt lỗi → chạy lại bằng ${liveAccs.length} token live...`,'info');
+    failedItems.forEach(x=>{x.status='pending';x.error=null;x.retries=0;x._accLabel=null;x._accId=null});
+    _safeRenderBatch(batchPage);
+    await new Promise(r=>setTimeout(r,2000));// brief pause between rounds
+    const rqWorkers=[];
+    for(const acc of liveAccs){
+      for(let t=0;t<threadsPerAcc;t++){
+        rqWorkers.push(_worker(acc,type,maxRetries,batchPage));
+      }
+    }
+    await Promise.all(rqWorkers);
+  }
+
   // Batch finished
   store.running=false;
   if(batchTimer)clearInterval(batchTimer);batchTimer=null;
@@ -1065,6 +1109,7 @@ async function startBatch(){
   _updateNavBatchIndicators();
   const done=store.BQ.filter(x=>x.status==='done').length,fail=store.BQ.filter(x=>x.status==='failed').length;
   toast(`Batch xong: ${done} thành công, ${fail} lỗi`,fail?'warn':'ok');
+  if(done>0)setTimeout(()=>toast('⚠️ File chỉ lưu 24h — hãy tải về máy ngay!','warn'),2000);
 }
 function stopBatch(){
   batchStopped=true;
@@ -1112,7 +1157,7 @@ function _renderHistPage(){
 function renderHistGrid(g,items,loadMore){
   g.innerHTML=items.map(h=>{
     const isV=h.type.includes('video')||h.type==='extend_video';
-    const thumb=h.output_url?(isV?`<video src="${h.output_url}#t=0.1" muted preload="metadata"></video>`:`<img src="${h.output_url}" loading="lazy">`):`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2)">${h.status==='failed'?'✕':'⏳'}</div>`;
+    const thumb=h.output_url?(isV?`<video src="${h.output_url}#t=0.1" muted preload="metadata" onerror="this.outerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3)\\'>⚠ Hết hạn</div>'"></video>`:`<img src="${h.output_url}" loading="lazy" onerror="this.outerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3)\\'>⚠ Hết hạn</div>'">`):`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2)">${h.status==='failed'?'✕':'⏳'}</div>`;
     const tl={text2video:'T→V',image2video:'I→V',text2image:'T→I',image2image:'I→I',extend_video:'Ext'}[h.type]||h.type;
     const dt=new Date(h.created_at).toLocaleDateString();const fav=h.favorite?'★':'☆';
     const sel=hSelectMode?`<div class="hcheck" onclick="event.stopPropagation();toggleHSel(${h.id})"><input type="checkbox" ${hSel.has(h.id)?'checked':''} style="pointer-events:none"></div>`:'';
@@ -1281,7 +1326,7 @@ async function bulkDl(){
 function openLightbox(url,isV,prompt){
   if(!url)return;const lb=document.getElementById('lightbox');if(!lb)return;
   const media=isV?`<video src="${url}" controls autoplay loop playsinline style="max-width:90vw;max-height:80vh;border-radius:12px"></video>`:`<img src="${url}" style="max-width:90vw;max-height:80vh;border-radius:12px;object-fit:contain">`;
-  lb.innerHTML=`<div class="lb-overlay" onclick="if(event.target===this)closeLightbox()"><div class="lb-content"><div class="lb-close" onclick="closeLightbox()">✕</div>${media}<div class="lb-info"><div class="lb-prompt">${prompt||''}</div><div class="lb-acts"><button class="btn-s" onclick="dlProxy('${url}','${isV?'video.mp4':'image.jpg'}')">⬇ Tải về</button><button class="btn-s" onclick="window.open('${url}','_blank')">↗ Mở</button>${prompt?`<button class="btn-s" onclick="copyPrompt('${prompt.replace(/'/g,"\\'")}')">📋 Copy Prompt</button>`:''}</div></div></div></div>`;
+  lb.innerHTML=`<div class="lb-overlay" onclick="if(event.target===this)closeLightbox()"><div class="lb-content"><div class="lb-close" onclick="closeLightbox()">✕</div>${media}<div class="lb-info"><div class="lb-prompt">${prompt||''}</div><div style="font-size:11px;color:var(--warn);margin:6px 0">⚠️ File chỉ lưu 24h — hãy tải về máy ngay</div><div class="lb-acts"><button class="btn-s" onclick="dlProxy('${url}','${isV?'video.mp4':'image.jpg'}')">⬇ Tải về</button><button class="btn-s" onclick="window.open('${url}','_blank')">↗ Mở</button>${prompt?`<button class="btn-s" onclick="copyPrompt('${prompt.replace(/'/g,"\\'")}')">📋 Copy Prompt</button>`:''}</div></div></div></div>`;
 }
 function closeLightbox(){const lb=document.getElementById('lightbox');if(lb)lb.innerHTML=''}
 
@@ -1302,7 +1347,7 @@ async function runDiag(){
 }
 
 /* ========== ACCOUNTS ========== */
-let _accSel=new Set(),_accSelectMode=false,_accList=[];
+let _accSel=new Set(),_accSelectMode=false,_accList=[],_accPage=0;
 function _updateAccBulkBar(){
   const bar=document.getElementById('acc-bulk-bar');if(!bar)return;
   if(!_accSelectMode||!_accSel.size){bar.style.display='none';return}
@@ -1337,15 +1382,21 @@ async function loadAcc(){
       }else{limitInfo.innerHTML=''}
     }
     if(!d.accounts?.length){el.innerHTML='<p class="muted">Chưa thêm tài khoản</p>';return}
-    _accList=d.accounts;
-    // Toolbar
-    const toolbar=`<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center"><span style="font-size:12px;color:var(--text2)">${d.accounts.length} token</span><span style="flex:1"></span><button class="btn-s" id="acc-view-btn" onclick="toggleAccView()" title="Đổi kiểu xem">${accViewMode==='grid'?'☰ Bảng':'▦ Card'}</button><button class="btn-s" onclick="accToggleSelectMode()">☐ Chọn</button></div>`;
-    if(accViewMode==='grid'){
-      el.innerHTML=toolbar+`<div class="acc-list">`+d.accounts.map(a=>_renderAccCard(a)).join('')+`</div>`;
-    }else{
-      el.innerHTML=toolbar+`<div class="glass-card tbl-wrap" style="padding:0"><table class="adm-tbl"><thead><tr><th style="width:30px"><input type="checkbox" class="acc-cb-all" onchange="accToggleAll(this.checked)" style="display:${_accSelectMode?'inline':'none'};width:14px;height:14px;cursor:pointer"></th><th>Nhãn</th><th>Token</th><th>CF</th><th>Status</th><th>Lần cuối</th><th>Thao tác</th></tr></thead><tbody>`+d.accounts.map(a=>_renderAccRow(a)).join('')+`</tbody></table></div>`;
-    }
+    _accList=d.accounts;_accPage=0;
+    _renderAccPage();
   }catch(e){el.innerHTML=`<p class="err">${e.message}</p>`}
+}
+function _renderAccPage(){
+  const el=document.getElementById('alist');if(!el)return;
+  if(!_accList.length){el.innerHTML='<p class="muted">Chưa thêm tài khoản</p>';return}
+  const start=_accPage*_BP;const visible=_accList.slice(start,start+_BP);
+  const toolbar=`<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center"><span style="font-size:12px;color:var(--text2)">${_accList.length} token</span><span style="flex:1"></span><button class="btn-s" id="acc-view-btn" onclick="toggleAccView()" title="Đổi kiểu xem">${accViewMode==='grid'?'☰ Bảng':'▦ Card'}</button><button class="btn-s" onclick="accToggleSelectMode()">☐ Chọn</button></div>`;
+  const pg=_pgHtml(_accPage,_accList.length,'_accGoPage');
+  if(accViewMode==='grid'){
+    el.innerHTML=toolbar+`<div class="acc-list">`+visible.map(a=>_renderAccCard(a)).join('')+`</div>`+pg;
+  }else{
+    el.innerHTML=toolbar+`<div class="glass-card tbl-wrap" style="padding:0"><table class="adm-tbl"><thead><tr><th style="width:30px"><input type="checkbox" class="acc-cb-all" onchange="accToggleAll(this.checked)" style="display:${_accSelectMode?'inline':'none'};width:14px;height:14px;cursor:pointer"></th><th>Nhãn</th><th>Token</th><th>CF</th><th>Status</th><th>Lần cuối</th><th>Thao tác</th></tr></thead><tbody>`+visible.map(a=>_renderAccRow(a)).join('')+`</tbody></table></div>`+pg;
+  }
 }
 function _renderAccCard(a){
   const ci=a.cookie_info||{};let cfStatus='',cfClass='';
@@ -1495,17 +1546,23 @@ async function loadProfile(){
     loadProfilePayments();
   }catch(e){toast(e.message,'err')}
 }
+let _profPayAll=[],_profPayPage=0;
+function _profPayGoPage(p){_profPayPage=p;_renderProfPay()}
 async function loadProfilePayments(){
   const el=document.getElementById('prof-payments');if(!el)return;
   try{
     const d=await API.pay.history();
-    const orders=d.orders||[];
-    if(!orders.length){el.innerHTML='<div class="muted" style="padding:10px">Chưa có giao dịch</div>';return}
-    el.innerHTML=`<table class="adm-tbl"><thead><tr><th>Gói</th><th>Số tiền</th><th>Status</th><th>Ngày</th></tr></thead><tbody>${orders.map(o=>{
-      const stCls=o.status==='completed'?'color:var(--ok)':o.status==='pending'?'color:var(--warn)':'color:var(--err)';
-      return `<tr><td><span class="badge">${planName(o.plan_id)}</span></td><td style="font-weight:600">${fmtVND(o.amount)}</td><td style="${stCls}">${o.status}</td><td class="sm">${o.created_at?new Date(o.created_at).toLocaleDateString():'-'}</td></tr>`;
-    }).join('')}</tbody></table>`;
+    _profPayAll=d.orders||[];_profPayPage=0;_renderProfPay();
   }catch{el.innerHTML='<div class="muted" style="padding:10px">Không tải được</div>'}
+}
+function _renderProfPay(){
+  const el=document.getElementById('prof-payments');if(!el)return;
+  if(!_profPayAll.length){el.innerHTML='<div class="muted" style="padding:10px">Chưa có giao dịch</div>';return}
+  const start=_profPayPage*_BP;const visible=_profPayAll.slice(start,start+_BP);
+  el.innerHTML=`<table class="adm-tbl"><thead><tr><th>Gói</th><th>Số tiền</th><th>Status</th><th>Ngày</th></tr></thead><tbody>${visible.map(o=>{
+    const stCls=o.status==='completed'?'color:var(--ok)':o.status==='pending'?'color:var(--warn)':'color:var(--err)';
+    return `<tr><td><span class="badge">${planName(o.plan_id)}</span></td><td style="font-weight:600">${fmtVND(o.amount)}</td><td style="${stCls}">${o.status}</td><td class="sm">${o.created_at?new Date(o.created_at).toLocaleDateString():'-'}</td></tr>`;
+  }).join('')}</tbody></table>`+_pgHtml(_profPayPage,_profPayAll.length,'_profPayGoPage');
 }
 async function saveProfile(){
   const name=document.getElementById('pf-name')?.value?.trim();
@@ -1542,16 +1599,28 @@ function renderGuide(){
     <div class="gs-title">Thêm Token Grok</div>
     <div class="gs-desc">Vào trang <a href="#" onclick="go('accounts');return false" style="color:var(--ok);text-decoration:underline">Cài đặt Token</a>, dán cookie hoặc SSO token từ tài khoản <b>grok.com</b> của bạn.</div>
     <div class="gs-sub">
-      <div class="gs-sub-title">Cách lấy token (dùng EditThisCookie):</div>
+      <div class="gs-sub-title">🤖 Cách 1: Dùng Tool tự động (khuyên dùng)</div>
+      <div class="gs-desc" style="margin-bottom:8px">Tool <b>Grok Studio Grabber</b> tự động đăng nhập và lấy cookie hàng loạt, upload thẳng lên hệ thống.</div>
+      <ol class="gs-ol">
+        <li><b>Tải tool:</b> <a href="https://drive.google.com/file/d/15FTxfRZ5mEM-Kz17t-trVSROzazUncnx/view?usp=sharing" target="_blank" style="color:var(--accent);font-weight:600">⬇ Tải Grok Studio Grabber (Windows)</a></li>
+        <li>Giải nén file ZIP, mở <b>GrokStudioGrabber.exe</b></li>
+        <li>Đăng nhập bằng tài khoản Grok Studio (cùng tài khoản web này)</li>
+        <li>Nhập danh sách tài khoản Grok: mỗi dòng <code>email|password</code></li>
+        <li>Nhấn <b>🚀 Bắt đầu Grab</b> — tool mở Chrome tự động đăng nhập, lấy cookie</li>
+        <li>Sau khi xong, nhấn <b>📤 Upload</b> — token tự động xuất hiện trên web</li>
+      </ol>
+      <div class="gs-tip ok">✅ Tool hỗ trợ grab hàng loạt (3 account/lần), tự fill email + password, chỉ cần giải captcha nếu có.</div>
+    </div>
+    <div class="gs-sub" style="margin-top:10px">
+      <div class="gs-sub-title">🔧 Cách 2: Lấy thủ công bằng Cookie Editor</div>
       <ol class="gs-ol">
         <li>Cài extension <a href="https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm" target="_blank" style="color:var(--accent)">Cookie Editor</a> trên Chrome/Edge</li>
         <li>Đăng nhập <a href="https://grok.com" target="_blank" style="color:var(--accent)">grok.com</a></li>
-        <li>Click icon Cookie Editor trên thanh toolbar → nhấn nút <b>Export</b> → chọn <b>Export as JSON</b> để copy</li>
-        <li>Dán toàn bộ JSON vào ô token tại <a href="#" onclick="go(\\'accounts\\');return false" style="color:var(--ok)">Cài đặt Token</a> và nhấn <b>Thêm</b></li>
+        <li>Click icon Cookie Editor → nhấn <b>Export</b> → chọn <b>Export as JSON</b></li>
+        <li>Dán JSON vào ô token tại <a href="#" onclick="go('accounts');return false" style="color:var(--ok)">Cài đặt Token</a> và nhấn <b>Thêm</b></li>
       </ol>
-      <div class="gs-tip info">💡 Thêm nhiều tài khoản Grok (nhiều token) để chạy batch song song và tránh bị giới hạn.</div>
-      <div class="gs-tip info" style="margin-top:6px">🤖 <b>Có nhiều account?</b> Dùng tool <b>Grok Cookie Grabber</b> để tự động đăng nhập và lấy cookie hàng loạt.<br>Tải tool: <a href="https://github.com" target="_blank" style="color:var(--accent)">grok_cookie_grabber.py</a> — Chạy: <code>python grok_cookie_grabber.py accounts.txt</code><br>File accounts.txt mỗi dòng: <code>email|password</code>. Kết quả copy dán thẳng vào Cài đặt Token.</div>
     </div>
+    <div class="gs-tip info" style="margin-top:8px">💡 Thêm nhiều tài khoản Grok (nhiều token) để chạy batch song song và tránh bị giới hạn.</div>
   </div>
 </div>
 
@@ -1595,7 +1664,7 @@ function renderGuide(){
   <div class="gs-body">
     <div class="gs-title">Xem kết quả & Tải về</div>
     <div class="gs-desc">Kết quả hiển thị ở tab <b>Hoàn thành</b> trong batch panel, hoặc trang <a href="#" onclick="go('history');return false" style="color:var(--ok);text-decoration:underline">Lịch sử</a>. Click vào để xem, nhấn ⬇ để tải.</div>
-    <div class="gs-tip info">💡 Ở trang Lịch sử, bạn có thể chọn nhiều file và tải ZIP cùng lúc.</div>
+    <div class="gs-tip warn">⚠️ <b>Quan trọng:</b> Video và ảnh chỉ được lưu trữ trong <b>24 giờ</b>. Hãy tải về máy ngay sau khi tạo xong để không bị mất file!</div>
   </div>
 </div>
 
@@ -1605,6 +1674,7 @@ function renderGuide(){
     <div class="gs-title">Lưu ý quan trọng</div>
     <div class="gs-desc">
       <ul class="gs-ol" style="margin-top:4px">
+        <li><b style="color:var(--warn)">File lưu trữ 24h:</b> Video/ảnh tự động bị xóa sau 24 giờ. Tải về máy ngay sau khi tạo!</li>
         <li><b>Giới hạn Grok.com:</b> Mỗi tài khoản Grok chỉ tạo được khoảng 80-200 video/ngày. Đây là giới hạn từ Grok.com, không phải từ Grok Studio.</li>
         <li><b>Token bị khóa tạm:</b> Khi token bị rate limit, hệ thống tự mở khóa sau 2 giờ. Bạn sẽ thấy biểu tượng 🔒 trên token.</li>
         <li><b>Nhiều token = ổn định hơn:</b> Thêm nhiều tài khoản Grok để batch chạy liên tục không bị gián đoạn.</li>
@@ -1622,7 +1692,7 @@ function renderPricing(){
   const exp=CU?.plan_expires?CU.plan_expires.slice(0,10):'';
   const curPlan=CU?.plan||'free';
   const isActive=curPlan!=='free'&&(!exp||exp>=new Date().toISOString().slice(0,10));
-  const planLabel={'week3':'Tuần Starter','week5':'Tuần Pro','week10':'Tuần Business','month3':'Tháng Starter','month5':'Tháng Pro','month10':'Tháng Business','3month3':'3T Starter','3month5':'3T Pro','3month10':'3T Business','unlimited':'Unlimited'}[curPlan]||curPlan;
+  const planLabel={'month1':'Tháng Starter','month5':'Tháng Pro','month10':'Tháng Business','3month1':'3T Starter','3month5':'3T Pro','3month10':'3T Business','week3':'Tuần Starter','week5':'Tuần Pro','week10':'Tuần Business','month3':'Tháng Starter','unlimited':'Unlimited'}[curPlan]||curPlan;
   const curInfo=isActive?`<div class="pr-current glass-card"><div class="pr-cur-badge">✓ Đang sử dụng</div><div class="pr-cur-plan">${planLabel}</div>${exp?`<div class="pr-cur-exp">Hết hạn: <b>${exp}</b></div>`:'<div class="pr-cur-exp">Vĩnh viễn</div>'}</div>`:`<div class="pr-current glass-card" style="border-color:rgba(251,191,36,.2)"><div class="pr-cur-badge" style="background:rgba(251,191,36,.15);color:var(--warn)">⚠ ${curPlan==='free'?'Gói miễn phí':'Hết hạn'}</div><div class="pr-cur-plan">${curPlan==='free'?'Nâng cấp để mở khóa tất cả tính năng':'Gia hạn để tiếp tục sử dụng'}</div></div>`;
   // Duration tabs + tier cards
   return `<div class="pr-page">
@@ -1630,8 +1700,7 @@ function renderPricing(){
   ${curInfo}
   <div class="pr-tabs">
     <div class="pr-tabs-inner">
-      <button class="pr-tab active" onclick="switchPrTab('week',this)">📅 1 Tuần</button>
-      <button class="pr-tab" onclick="switchPrTab('month',this)">📆 1 Tháng</button>
+      <button class="pr-tab active" onclick="switchPrTab('month',this)">📆 1 Tháng</button>
       <button class="pr-tab" onclick="switchPrTab('3month',this)">🗓 3 Tháng</button>
     </div>
   </div>
@@ -1640,24 +1709,17 @@ function renderPricing(){
   <div class="pr-footer"><div class="pr-trust">🔒 Thanh toán an toàn qua chuyển khoản ngân hàng ACB</div></div>
 </div>`;
 }
-const _prPlans={
-  week:[
-    {id:'week3',tier:'Starter',price:79000,accs:3,period:'7 ngày'},
-    {id:'week5',tier:'Pro',price:129000,accs:5,period:'7 ngày',pop:true},
-    {id:'week10',tier:'Business',price:199000,accs:10,period:'7 ngày'}
-  ],
-  month:[
-    {id:'month3',tier:'Starter',price:199000,accs:3,period:'30 ngày',save:'Tiết kiệm 28%'},
-    {id:'month5',tier:'Pro',price:349000,accs:5,period:'30 ngày',pop:true,save:'Tiết kiệm 38%'},
-    {id:'month10',tier:'Business',price:549000,accs:10,period:'30 ngày',save:'Tiết kiệm 36%'}
-  ],
-  '3month':[
-    {id:'3month3',tier:'Starter',price:499000,accs:3,period:'90 ngày',save:'Tiết kiệm 47%'},
-    {id:'3month5',tier:'Pro',price:899000,accs:5,period:'90 ngày',pop:true,save:'Tiết kiệm 53%'},
-    {id:'3month10',tier:'Business',price:1399000,accs:10,period:'90 ngày',save:'Tiết kiệm 50%'}
-  ]
-};
-let _prDur='week';
+const _prPlans={month:[],_3month:[]};
+let _prDur='month';
+let _prLoaded=false;
+async function _loadPrPlans(){
+  if(_prLoaded)return;
+  try{const d=await API.getPlans();const sp=d.service_plans||[];
+    _prPlans.month=sp.filter(p=>p.duration==='month'&&p.active).map(p=>({id:p.id,tier:p.tier,price:p.price,accs:p.accs,period:p.days+' ngày',pop:!!p.popular,save:p.save_text||''}));
+    _prPlans._3month=sp.filter(p=>p.duration==='3month'&&p.active).map(p=>({id:p.id,tier:p.tier,price:p.price,accs:p.accs,period:p.days+' ngày',pop:!!p.popular,save:p.save_text||''}));
+    _prLoaded=true;
+  }catch(e){console.error('Load plans error',e)}
+}
 function switchPrTab(dur,btn){
   _prDur=dur;
   document.querySelectorAll('.pr-tab').forEach(b=>b.classList.remove('active'));
@@ -1666,7 +1728,8 @@ function switchPrTab(dur,btn){
 }
 function renderPrCards(){
   const el=document.getElementById('pr-cards');if(!el)return;
-  const plans=_prPlans[_prDur];
+  const plans=_prDur==='month'?_prPlans.month:_prPlans._3month;
+  if(!plans.length){el.innerHTML='<div style="text-align:center;color:var(--text2);padding:40px">Đang tải gói...</div>';return}
   const curPlan=CU?.plan||'free';
   const exp=CU?.plan_expires?CU.plan_expires.slice(0,10):'';
   const isActive=curPlan!=='free'&&(!exp||exp>=new Date().toISOString().slice(0,10));
@@ -1694,7 +1757,7 @@ function renderPrCards(){
     </div>`;
   }).join('')+'</div>';
 }
-function afterPricing(){renderPrCards()}
+async function afterPricing(){await _loadPrPlans();renderPrCards()}
 
 let _payPollTimer=null;
 async function buyPlan(planId){
@@ -1756,7 +1819,7 @@ function renderAdmDash(){return `<div class="page-title">Admin Dashboard</div><d
 function renderAdmUsers(){return `<div class="page-title">Quản lý Users</div><div class="page-sub">Tất cả người dùng</div><div class="adm-toolbar"><input id="aus" placeholder="Tìm email/tên..." oninput="debouncedAU()"><select id="aup" onchange="loadAdmUsers()"><option value="">Tất cả Plan</option><option value="free">Free</option><option value="week3">Tuần Starter</option><option value="week5">Tuần Pro</option><option value="week10">Tuần Business</option><option value="month3">Tháng Starter</option><option value="month5">Tháng Pro</option><option value="month10">Tháng Business</option><option value="3month3">3T Starter</option><option value="3month5">3T Pro</option><option value="3month10">3T Business</option><option value="unlimited">Unlimited</option></select><select id="aur" onchange="loadAdmUsers()"><option value="">Tất cả Role</option><option value="user">User</option><option value="admin">Admin</option></select><span style="flex:1"></span><button class="btn-s" onclick="createUserModal()">+ Tạo User</button><button class="btn-s" onclick="bulkCreateModal()">👥 Tạo hàng loạt</button></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>Email</th><th>Tên</th><th>Plan</th><th>Role</th><th>Credits</th><th>Lượt/ngày</th><th>Video/ngày</th><th>Hết hạn</th><th>Actions</th></tr></thead><tbody id="aubody"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div><div id="umodal"></div>`}
 function renderAdmTokens(){return `<div class="page-title">Tất cả SSO Tokens</div><div class="page-sub">Quản lý tài khoản Grok</div><div class="adm-toolbar"><select id="aas" onchange="loadAdmTokens()"><option value="">Tất cả</option><option value="active">Active</option><option value="limited">Limited</option><option value="invalid">Invalid</option></select></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>User</th><th>Nhãn</th><th>Token</th><th>Status</th><th>Lần cuối</th><th>Actions</th></tr></thead><tbody id="aabody"><tr><td colspan="7"><div class="spin-lg"></div></td></tr></tbody></table></div><div id="amodal"></div>`}
 function renderAdmHist(){return `<div class="page-title">Tất cả History</div><div class="page-sub">Lịch sử tạo của mọi user</div><div class="adm-toolbar"><select id="aht" onchange="loadAdmHist()"><option value="">Tất cả</option><option value="text2video">T→V</option><option value="image2video">I→V</option><option value="text2image">T→I</option><option value="image2image">I→I</option><option value="extend_video">Ext</option></select><select id="ahs" onchange="loadAdmHist()"><option value="">Tất cả</option><option value="completed">Completed</option><option value="failed">Failed</option><option value="processing">Processing</option></select></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>User</th><th>Type</th><th>Prompt</th><th>Status</th><th>Ngày</th><th>Output</th></tr></thead><tbody id="ahbody"><tr><td colspan="7"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
-function renderAdmPlans(){return `<div class="page-title">Quản lý Plans</div><div class="page-sub">Cấu hình gói dịch vụ</div><div class="stats-grid" id="aplist"><div class="spin-lg"></div></div><div id="pmodal"></div>`}
+function renderAdmPlans(){return `<div class="page-title">Quản lý Plans</div><div class="page-sub">Cấu hình gói dịch vụ (giá, số acc, thời hạn)</div><div style="margin-bottom:12px"><button class="btn-s" onclick="addSvcPlanModal()">+ Thêm gói mới</button></div><div class="glass-card tbl-wrap"><table class="adm-tbl"><thead><tr><th>ID</th><th>Tên</th><th>Tier</th><th>Thời hạn</th><th>Giá (₫)</th><th>Ngày</th><th>Acc</th><th>Phổ biến</th><th>Active</th><th>Actions</th></tr></thead><tbody id="apbody"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div><div id="pmodal"></div>`}
 
 /* ========== ADMIN LOADERS ========== */
 async function loadAdmStats(){
@@ -1771,14 +1834,20 @@ async function loadAdmUsers(){
   const q=new URLSearchParams();if(s)q.set('search',s);if(p)q.set('plan',p);if(r)q.set('role',r);
   const body=document.getElementById('aubody');if(!body)return;
   try{const{users}=await API.adm.users(q.toString());
-    if(!users.length){body.innerHTML='<tr><td colspan="10" class="muted">Không có user</td></tr>';return}
-    body.innerHTML=users.map(u=>{
-      const dl=u.daily_limit==null||u.daily_limit===-1?'—':(u.daily_limit===0?'🚫':u.daily_limit);
-      const vl=u.video_limit==null||u.video_limit===-1?'—':(u.video_limit===0?'🚫':u.video_limit);
-      const exp=u.plan_expires?u.plan_expires.slice(0,10):'∞';
-      const expCls=u.plan_expires&&u.plan_expires.slice(0,10)<new Date().toISOString().slice(0,10)?'color:var(--err)':'';
-      return `<tr><td>${u.id}</td><td>${u.email}</td><td>${u.name||'-'}</td><td><span class="badge">${planName(u.plan)}</span></td><td><span class="badge${u.role==='admin'?' admin':''}">${u.role||'user'}</span></td><td>${u.credits===-1?'∞':u.credits}</td><td class="sm">${dl}</td><td class="sm">${vl}</td><td class="sm" style="${expCls}">${exp}</td><td class="acts"><button class="btn-s" onclick='editUserModal(${JSON.stringify(u).replace(/'/g,"&#39;")})'> Sửa</button>${u.id!==CU?.id?`<button class="btn-s danger" onclick="adminDelUser(${u.id})">Xóa</button>`:''}</td></tr>`}).join('');
+    _auAll=users||[];_auPage=0;_renderAdmUsersPage();
   }catch(e){body.innerHTML=`<tr><td colspan="10" class="err">${e.message}</td></tr>`}
+}
+function _renderAdmUsersPage(){
+  const body=document.getElementById('aubody');if(!body)return;
+  if(!_auAll.length){body.innerHTML='<tr><td colspan="10" class="muted">Không có user</td></tr>';return}
+  const start=_auPage*_BP;const visible=_auAll.slice(start,start+_BP);
+  body.innerHTML=visible.map(u=>{
+    const dl=u.daily_limit==null||u.daily_limit===-1?'—':(u.daily_limit===0?'🚫':u.daily_limit);
+    const vl=u.video_limit==null||u.video_limit===-1?'—':(u.video_limit===0?'🚫':u.video_limit);
+    const exp=u.plan_expires?u.plan_expires.slice(0,10):'∞';
+    const expCls=u.plan_expires&&u.plan_expires.slice(0,10)<new Date().toISOString().slice(0,10)?'color:var(--err)':'';
+    return `<tr><td>${u.id}</td><td>${u.email}</td><td>${u.name||'-'}</td><td><span class="badge">${planName(u.plan)}</span></td><td><span class="badge${u.role==='admin'?' admin':''}">${u.role||'user'}</span></td><td>${u.credits===-1?'∞':u.credits}</td><td class="sm">${dl}</td><td class="sm">${vl}</td><td class="sm" style="${expCls}">${exp}</td><td class="acts"><button class="btn-s" onclick='editUserModal(${JSON.stringify(u).replace(/'/g,"&#39;")})'> Sửa</button>${u.id!==CU?.id?`<button class="btn-s danger" onclick="adminDelUser(${u.id})">Xóa</button>`:''}</td></tr>`}).join('');
+  const pg=body.closest('.tbl-wrap');if(pg){let pgDiv=pg.nextElementSibling;if(!pgDiv||!pgDiv.classList.contains('au-pg')){pgDiv=document.createElement('div');pgDiv.className='au-pg';pg.after(pgDiv)}pgDiv.innerHTML=_pgHtml(_auPage,_auAll.length,'_auGoPage')}
 }
 function editUserModal(u){
   const id=u.id,email=u.email,name=u.name||'',plan=u.plan,role=u.role||'user',credits=u.credits,dl=u.daily_limit??-1,vl=u.video_limit??-1,exp=u.plan_expires||'';
@@ -1824,9 +1893,15 @@ async function doBulkCreate(){
 async function loadAdmTokens(){
   const st=document.getElementById('aas')?.value||'';const q=st?`status=${st}`:'';const body=document.getElementById('aabody');if(!body)return;
   try{const{accounts}=await API.adm.accounts(q);
-    if(!accounts.length){body.innerHTML='<tr><td colspan="7" class="muted">Không có</td></tr>';return}
-    body.innerHTML=accounts.map(a=>`<tr><td>${a.id}</td><td class="sm">${a.user_email}</td><td>${a.label||'-'}</td><td class="mono sm">${a.token_preview}</td><td><span class="acc-status ${a.status}">${a.status}</span></td><td class="sm">${a.last_used?new Date(a.last_used).toLocaleString():'Never'}</td><td class="acts"><button class="btn-s" onclick="editAccModal(${a.id},'${(a.label||'').replace(/'/g,"\\'")}','${a.status}')">Sửa</button><button class="btn-s danger" onclick="adminDelAcc(${a.id})">Xóa</button></td></tr>`).join('');
+    _aaAll=accounts||[];_aaPage=0;_renderAdmTokensPage();
   }catch(e){body.innerHTML=`<tr><td colspan="7" class="err">${e.message}</td></tr>`}
+}
+function _renderAdmTokensPage(){
+  const body=document.getElementById('aabody');if(!body)return;
+  if(!_aaAll.length){body.innerHTML='<tr><td colspan="7" class="muted">Không có</td></tr>';return}
+  const start=_aaPage*_BP;const visible=_aaAll.slice(start,start+_BP);
+  body.innerHTML=visible.map(a=>`<tr><td>${a.id}</td><td class="sm">${a.user_email}</td><td>${a.label||'-'}</td><td class="mono sm">${a.token_preview}</td><td><span class="acc-status ${a.status}">${a.status}</span></td><td class="sm">${a.last_used?new Date(a.last_used).toLocaleString():'Never'}</td><td class="acts"><button class="btn-s" onclick="editAccModal(${a.id},'${(a.label||'').replace(/'/g,"\\'")}','${a.status}')">Sửa</button><button class="btn-s danger" onclick="adminDelAcc(${a.id})">Xóa</button></td></tr>`).join('');
+  const pg=body.closest('.tbl-wrap');if(pg){let pgDiv=pg.nextElementSibling;if(!pgDiv||!pgDiv.classList.contains('aa-pg')){pgDiv=document.createElement('div');pgDiv.className='aa-pg';pg.after(pgDiv)}pgDiv.innerHTML=_pgHtml(_aaPage,_aaAll.length,'_aaGoPage')}
 }
 function editAccModal(id,label,status){document.getElementById('amodal').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal('amodal')"><div class="glass-card modal"><div class="modal-title">Sửa Account</div><div class="fg"><label>Nhãn</label><input id="ea-label" value="${label}"></div><div class="fg"><label>Status</label><select id="ea-status"><option value="active"${status==='active'?' selected':''}>Active</option><option value="limited"${status==='limited'?' selected':''}>Limited</option><option value="invalid"${status==='invalid'?' selected':''}>Invalid</option></select></div><div class="modal-acts"><button class="btn-s" onclick="closeModal('amodal')">Hủy</button><button class="btn-primary" style="padding:10px 20px" onclick="saveAcc(${id})">Lưu</button></div></div></div>`}
 async function saveAcc(id){try{await API.adm.updAcc(id,{label:document.getElementById('ea-label').value,status:document.getElementById('ea-status').value});toast('Đã cập nhật','ok');closeModal('amodal');loadAdmTokens()}catch(e){toast(e.message,'err')}}
@@ -1835,33 +1910,58 @@ async function adminDelAcc(id){if(!confirm('Xóa SSO token này?'))return;try{aw
 /* ========== ADMIN HISTORY ========== */
 async function loadAdmHist(){
   const t=document.getElementById('aht')?.value||'',s=document.getElementById('ahs')?.value||'';
-  const q=new URLSearchParams();if(t)q.set('type',t);if(s)q.set('status',s);q.set('limit','100');
+  const q=new URLSearchParams();if(t)q.set('type',t);if(s)q.set('status',s);q.set('limit','500');
   const body=document.getElementById('ahbody');if(!body)return;
   try{const{history}=await API.adm.history(q.toString());
-    if(!history.length){body.innerHTML='<tr><td colspan="7" class="muted">Không có</td></tr>';return}
-    body.innerHTML=history.map(h=>{const tl={text2video:'T→V',image2video:'I→V',text2image:'T→I',image2image:'I→I',extend_video:'Ext'}[h.type]||h.type;const ps=(h.prompt||'').substring(0,60)+((h.prompt||'').length>60?'...':'');const has=h.output_url&&h.output_url.startsWith('http');
-      return `<tr><td>${h.id}</td><td class="sm">${h.user_email}</td><td><span class="badge">${tl}</span></td><td class="sm prompt-cell" title="${(h.prompt||'').replace(/"/g,'&quot;')}">${ps}</td><td><span class="sdot ${h.status}"></span>${h.status}</td><td class="sm">${new Date(h.created_at).toLocaleString()}</td><td>${has?`<a href="${h.output_url}" target="_blank" class="sm">Xem</a>`:'-'}</td></tr>`}).join('');
+    _ahAll=history||[];_ahPage=0;_renderAdmHistPage();
   }catch(e){body.innerHTML=`<tr><td colspan="7" class="err">${e.message}</td></tr>`}
+}
+function _renderAdmHistPage(){
+  const body=document.getElementById('ahbody');if(!body)return;
+  if(!_ahAll.length){body.innerHTML='<tr><td colspan="7" class="muted">Không có</td></tr>';return}
+  const start=_ahPage*_BP;const visible=_ahAll.slice(start,start+_BP);
+  body.innerHTML=visible.map(h=>{const tl={text2video:'T→V',image2video:'I→V',text2image:'T→I',image2image:'I→I',extend_video:'Ext'}[h.type]||h.type;const ps=(h.prompt||'').substring(0,60)+((h.prompt||'').length>60?'...':'');const has=h.output_url&&h.output_url.startsWith('http');
+    return `<tr><td>${h.id}</td><td class="sm">${h.user_email}</td><td><span class="badge">${tl}</span></td><td class="sm prompt-cell" title="${(h.prompt||'').replace(/"/g,'&quot;')}">${ps}</td><td><span class="sdot ${h.status}"></span>${h.status}</td><td class="sm">${new Date(h.created_at).toLocaleString()}</td><td>${has?`<a href="${h.output_url}" target="_blank" class="sm">Xem</a>`:'-'}</td></tr>`}).join('');
+  const pg=body.closest('.tbl-wrap');if(pg){let pgDiv=pg.nextElementSibling;if(!pgDiv||!pgDiv.classList.contains('ah-pg')){pgDiv=document.createElement('div');pgDiv.className='ah-pg';pg.after(pgDiv)}pgDiv.innerHTML=_pgHtml(_ahPage,_ahAll.length,'_ahGoPage')}
 }
 
 /* ========== ADMIN PLANS ========== */
 async function loadAdmPlans(){
-  const c=document.getElementById('aplist');if(!c)return;
-  try{const{plans}=await API.getPlans();
-    c.innerHTML=plans.map(p=>{const ft=JSON.parse(p.features||'{}');const fl=Object.entries(ft).map(([k,v])=>`<div style="font-size:11px;color:${v?'var(--ok)':'var(--text2)'}">${v?'✓':'✕'} ${k}</div>`).join('');
-      const dl=p.daily_limit===-1?'∞':p.daily_limit;const vl=p.video_limit===-1?'∞':p.video_limit;
-      return `<div class="glass-card" style="text-align:left"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-size:18px;font-weight:600">${p.name}</div><button class="btn-s" onclick='editPlanModal(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Sửa</button></div><div style="font-size:28px;font-weight:700">${p.price}<span style="font-size:13px;color:var(--text2);font-weight:400">/tháng</span></div><div style="margin-top:12px;font-size:12px;color:var(--text2)">${p.credits_per_month===-1?'Unlimited':p.credits_per_month} credits · ${p.max_accounts} accounts</div><div style="margin-top:6px;font-size:12px;color:var(--text2)">📊 ${dl} lượt/ngày · 🎬 ${vl} video/ngày</div><div style="margin-top:12px">${fl}</div></div>`}).join('');
-  }catch(e){c.innerHTML=`<p class="err">${e.message}</p>`}
+  const c=document.getElementById('apbody');if(!c)return;
+  try{const{plans}=await API.adm.svcPlans();
+    c.innerHTML=plans.map(p=>`<tr>
+      <td><code>${p.id}</code></td><td>${p.name}</td><td>${p.tier}</td><td>${p.duration}</td>
+      <td style="font-weight:600">${(p.price||0).toLocaleString('vi-VN')}₫</td><td>${p.days}</td><td>${p.accs}</td>
+      <td>${p.popular?'🔥':''}</td><td>${p.active?'✅':'❌'}</td>
+      <td><button class="btn-s" onclick='editSvcPlanModal(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Sửa</button> <button class="btn-s" style="color:var(--err)" onclick="delSvcPlan('${p.id}')">Xóa</button></td>
+    </tr>`).join('')||'<tr><td colspan="10">Chưa có gói nào</td></tr>';
+  }catch(e){c.innerHTML=`<tr><td colspan="10" class="err">${e.message}</td></tr>`}
 }
-function editPlanModal(plan){
-  const ft=typeof plan.features==='string'?JSON.parse(plan.features):plan.features;
-  const checks=['text2image','image2image','text2video','image2video','extend_video'].map(f=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="pf-${f}" ${ft[f]?'checked':''}> ${f}</label>`).join('');
-  document.getElementById('pmodal').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal('pmodal')"><div class="glass-card modal"><div class="modal-title">Sửa Plan: ${plan.name}</div><div class="fg"><label>Tên</label><input id="ep-name" value="${plan.name}"></div><div class="fg"><label>Giá ($/tháng)</label><input type="number" id="ep-price" value="${plan.price}" step="0.01"></div><div class="fg"><label>Credits/tháng (-1=∞)</label><input type="number" id="ep-credits" value="${plan.credits_per_month}"></div><div class="fg"><label>Max Accounts</label><input type="number" id="ep-accounts" value="${plan.max_accounts}"></div><div class="fg-row"><div class="fg"><label>Giới hạn/ngày (-1=∞)</label><input type="number" id="ep-daily" value="${plan.daily_limit??-1}"></div><div class="fg"><label>Video/ngày (-1=∞)</label><input type="number" id="ep-video" value="${plan.video_limit??-1}"></div></div><div class="fg"><label>Features</label><div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">${checks}</div></div><div class="modal-acts"><button class="btn-s" onclick="closeModal('pmodal')">Hủy</button><button class="btn-primary" style="padding:10px 20px" onclick="savePlan('${plan.id}')">Lưu</button></div></div></div>`;
+function editSvcPlanModal(p){
+  document.getElementById('pmodal').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal('pmodal')"><div class="glass-card modal"><div class="modal-title">Sửa gói: ${p.name}</div>
+    <div class="fg"><label>Tên</label><input id="sp-name" value="${p.name}"></div>
+    <div class="fg-row"><div class="fg"><label>Tier</label><select id="sp-tier"><option ${p.tier==='Starter'?'selected':''}>Starter</option><option ${p.tier==='Pro'?'selected':''}>Pro</option><option ${p.tier==='Business'?'selected':''}>Business</option></select></div><div class="fg"><label>Duration</label><select id="sp-dur"><option value="month" ${p.duration==='month'?'selected':''}>month</option><option value="3month" ${p.duration==='3month'?'selected':''}>3month</option></select></div></div>
+    <div class="fg-row"><div class="fg"><label>Giá (₫)</label><input type="number" id="sp-price" value="${p.price}"></div><div class="fg"><label>Số ngày</label><input type="number" id="sp-days" value="${p.days}"></div><div class="fg"><label>Số acc</label><input type="number" id="sp-accs" value="${p.accs}"></div></div>
+    <div class="fg-row"><div class="fg"><label>Save text</label><input id="sp-save" value="${p.save_text||''}"></div><div class="fg"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="sp-pop" ${p.popular?'checked':''}> Phổ biến</label></div><div class="fg"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="sp-active" ${p.active?'checked':''}> Active</label></div></div>
+    <div class="modal-acts"><button class="btn-s" onclick="closeModal('pmodal')">Hủy</button><button class="btn-primary" style="padding:10px 20px" onclick="saveSvcPlan('${p.id}')">Lưu</button></div></div></div>`;
 }
-async function savePlan(id){const ft={};['text2image','image2image','text2video','image2video','extend_video'].forEach(f=>{ft[f]=document.getElementById(`pf-${f}`).checked});try{await API.adm.updPlan(id,{name:document.getElementById('ep-name').value,price:+document.getElementById('ep-price').value,credits_per_month:+document.getElementById('ep-credits').value,max_accounts:+document.getElementById('ep-accounts').value,daily_limit:+document.getElementById('ep-daily').value,video_limit:+document.getElementById('ep-video').value,features:ft});toast('Đã cập nhật','ok');closeModal('pmodal');loadAdmPlans()}catch(e){toast(e.message,'err')}}
+async function saveSvcPlan(id){try{await API.adm.updSvcPlan(id,{name:document.getElementById('sp-name').value,tier:document.getElementById('sp-tier').value,duration:document.getElementById('sp-dur').value,price:+document.getElementById('sp-price').value,days:+document.getElementById('sp-days').value,accs:+document.getElementById('sp-accs').value,save_text:document.getElementById('sp-save').value,popular:document.getElementById('sp-pop').checked,active:document.getElementById('sp-active').checked});toast('Đã cập nhật gói','ok');closeModal('pmodal');loadAdmPlans()}catch(e){toast(e.message,'err')}}
+function addSvcPlanModal(){
+  document.getElementById('pmodal').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal('pmodal')"><div class="glass-card modal"><div class="modal-title">Thêm gói mới</div>
+    <div class="fg"><label>ID (vd: month1, 3month5)</label><input id="sp-id" placeholder="plan_id"></div>
+    <div class="fg"><label>Tên</label><input id="sp-name" placeholder="Tháng - Starter"></div>
+    <div class="fg-row"><div class="fg"><label>Tier</label><select id="sp-tier"><option>Starter</option><option>Pro</option><option>Business</option></select></div><div class="fg"><label>Duration</label><select id="sp-dur"><option value="month">month</option><option value="3month">3month</option></select></div></div>
+    <div class="fg-row"><div class="fg"><label>Giá (₫)</label><input type="number" id="sp-price" value="0"></div><div class="fg"><label>Số ngày</label><input type="number" id="sp-days" value="30"></div><div class="fg"><label>Số acc</label><input type="number" id="sp-accs" value="1"></div></div>
+    <div class="fg-row"><div class="fg"><label>Save text</label><input id="sp-save" placeholder="Tiết kiệm 10%"></div><div class="fg"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="sp-pop"> Phổ biến</label></div></div>
+    <div class="modal-acts"><button class="btn-s" onclick="closeModal('pmodal')">Hủy</button><button class="btn-primary" style="padding:10px 20px" onclick="createSvcPlan()">Tạo</button></div></div></div>`;
+}
+async function createSvcPlan(){try{await API.adm.addSvcPlan({id:document.getElementById('sp-id').value,name:document.getElementById('sp-name').value,tier:document.getElementById('sp-tier').value,duration:document.getElementById('sp-dur').value,price:+document.getElementById('sp-price').value,days:+document.getElementById('sp-days').value,accs:+document.getElementById('sp-accs').value,save_text:document.getElementById('sp-save').value,popular:document.getElementById('sp-pop').checked});toast('Đã tạo gói mới','ok');closeModal('pmodal');loadAdmPlans()}catch(e){toast(e.message,'err')}}
+async function delSvcPlan(id){if(!confirm('Xóa gói '+id+'?'))return;try{await API.adm.delSvcPlan(id);toast('Đã xóa','ok');loadAdmPlans()}catch(e){toast(e.message,'err')}}
 
 /* ========== PLAN NAME HELPER ========== */
-const PLAN_NAMES={'week3':'Tuần Starter','week5':'Tuần Pro','week10':'Tuần Business','month3':'Tháng Starter','month5':'Tháng Pro','month10':'Tháng Business','3month3':'3T Starter','3month5':'3T Pro','3month10':'3T Business','free':'Free','unlimited':'Unlimited'};
+let _svcPlanCache=null;
+async function _loadSvcPlanCache(){if(!_svcPlanCache){try{const d=await API.getPlans();_svcPlanCache=d.service_plans||[]}catch{_svcPlanCache=[]}}return _svcPlanCache}
+const PLAN_NAMES={'month1':'Tháng Starter','month5':'Tháng Pro','month10':'Tháng Business','3month1':'3T Starter','3month5':'3T Pro','3month10':'3T Business','free':'Free','unlimited':'Unlimited','week3':'Tuần Starter','week5':'Tuần Pro','week10':'Tuần Business','month3':'Tháng Starter'};
 function planName(id){return PLAN_NAMES[id]||id||'—'}
 function fmtVND(n){return(n||0).toLocaleString('vi-VN')+'₫'}
 
@@ -1891,7 +1991,17 @@ async function loadAdmPay(){
     if(sg)sg.innerHTML=`<div class="glass-card stat-card"><div class="sv">${fmtVND(s.totalRevenue)}</div><div class="sl">Tổng doanh thu</div></div><div class="glass-card stat-card"><div class="sv">${fmtVND(s.todayRevenue)}</div><div class="sl">Hôm nay</div></div><div class="glass-card stat-card"><div class="sv">${s.completed||0}</div><div class="sl">Hoàn thành</div></div><div class="glass-card stat-card"><div class="sv" style="color:var(--warn)">${s.pending||0}</div><div class="sl">Đang chờ</div></div><div class="glass-card stat-card"><div class="sv">${s.total||0}</div><div class="sl">Tổng đơn</div></div>`;
     const orders=d.orders||[];
     if(!orders.length){if(body)body.innerHTML='<tr><td colspan="9" class="muted">Không có giao dịch</td></tr>';return}
-    if(body)body.innerHTML=orders.map(o=>{
+    _apAll=orders;_apPage=0;_renderAdmPayPage();
+  }catch(e){
+    if(sg)sg.innerHTML=`<p class="err">${e.message}</p>`;
+    if(body)body.innerHTML=`<tr><td colspan="9" class="err">${e.message}</td></tr>`;
+  }
+}
+function _renderAdmPayPage(){
+  const body=document.getElementById('apbody');if(!body)return;
+  if(!_apAll.length){body.innerHTML='<tr><td colspan="9" class="muted">Không có giao dịch</td></tr>';return}
+  const start=_apPage*_BP;const visible=_apAll.slice(start,start+_BP);
+  body.innerHTML=visible.map(o=>{
       const stCls=o.status==='completed'?'color:var(--ok)':o.status==='pending'?'color:var(--warn)':'color:var(--err)';
       const dt=o.created_at?new Date(o.created_at).toLocaleString():'—';
       const ct=o.completed_at?new Date(o.completed_at).toLocaleString():'—';
@@ -1904,12 +2014,9 @@ async function loadAdmPay(){
         <td style="${stCls};font-weight:600">${o.status}</td>
         <td class="sm">${dt}</td>
         <td class="sm">${ct}</td>
-        <td class="acts">${o.status==='pending'?`<button class="btn-s" onclick="approvePay(${o.id})" style="color:var(--ok)">✓ Duyệt</button>`:''}<button class="btn-s danger" onclick="deletePay(${o.id})">Xóa</button></td>
+        <td class="acts">${o.status==='pending'?`<button class="btn-s" onclick="approvePay(${o.id})" style="color:var(--ok)">✓ Duyệt</button>`:''}${CU?.role==='superadmin'?`<button class="btn-s danger" onclick="deletePay(${o.id})">Xóa</button>`:''}</td>
       </tr>`}).join('');
-  }catch(e){
-    if(sg)sg.innerHTML=`<p class="err">${e.message}</p>`;
-    if(body)body.innerHTML=`<tr><td colspan="9" class="err">${e.message}</td></tr>`;
-  }
+  const pg=body.closest('.tbl-wrap');if(pg){let pgDiv=pg.nextElementSibling;if(!pgDiv||!pgDiv.classList.contains('ap-pg')){pgDiv=document.createElement('div');pgDiv.className='ap-pg';pg.after(pgDiv)}pgDiv.innerHTML=_pgHtml(_apPage,_apAll.length,'_apGoPage')}
 }
 async function approvePay(id){
   if(!confirm('Duyệt đơn hàng này? User sẽ được nâng cấp gói.'))return;
@@ -1938,7 +2045,14 @@ async function loadAdmCTV(){
     if(sg)sg.innerHTML=`<div class="stat-card"><div class="stat-val">${s.totalAffiliates}</div><div class="stat-lbl">Tổng CTV</div></div><div class="stat-card"><div class="stat-val">${s.totalReferrals}</div><div class="stat-lbl">Tổng Referrals</div></div><div class="stat-card"><div class="stat-val">${(s.totalCommission||0).toLocaleString('vi-VN')}₫</div><div class="stat-lbl">Tổng hoa hồng</div></div><div class="stat-card"><div class="stat-val">${(s.pendingCommission||0).toLocaleString('vi-VN')}₫</div><div class="stat-lbl">Chờ thanh toán</div></div>`;
     const tb=document.getElementById('ctv-body');if(!tb)return;
     if(!d.affiliates.length){tb.innerHTML='<tr><td colspan="10" class="muted">Chưa có CTV</td></tr>';return}
-    tb.innerHTML=d.affiliates.map(a=>{
+    _acAll=d.affiliates;_acPage=0;_renderAdmCTVPage();
+  }catch(e){toast(e.message,'err')}
+}
+function _renderAdmCTVPage(){
+  const tb=document.getElementById('ctv-body');if(!tb)return;
+  if(!_acAll.length){tb.innerHTML='<tr><td colspan="10" class="muted">Chưa có CTV</td></tr>';return}
+  const start=_acPage*_BP;const visible=_acAll.slice(start,start+_BP);
+  tb.innerHTML=visible.map(a=>{
       const link=`https://grok.liveyt.pro/?ref=${a.ref_code}`;
       return `<tr>
         <td>${a.id}</td><td class="sm">${a.email}</td><td>${a.name||'-'}</td>
@@ -1953,7 +2067,7 @@ async function loadAdmCTV(){
           <button class="btn-s danger" onclick="removeCTV(${a.id})">Xóa</button>
         </td>
       </tr>`}).join('');
-  }catch(e){toast(e.message,'err')}
+  const pg=tb.closest('.tbl-wrap');if(pg){let pgDiv=pg.nextElementSibling;if(!pgDiv||!pgDiv.classList.contains('ac-pg')){pgDiv=document.createElement('div');pgDiv.className='ac-pg';pg.after(pgDiv)}pgDiv.innerHTML=_pgHtml(_acPage,_acAll.length,'_acGoPage')}
 }
 
 function addCTVModal(){
@@ -2004,6 +2118,7 @@ function renderAdmComms(){return `<div class="page-title">Lịch sử Hoa hồng
 <div class="adm-toolbar">
   <select id="cm-status" onchange="loadAdmComms()"><option value="">Tất cả</option><option value="pending">Chờ TT</option><option value="paid">Đã TT</option></select>
   <button class="btn-s" onclick="go('admin-ctv')">← Quay lại CTV</button>
+  <button class="btn-s" onclick="go('admin-redemptions')">🎁 Yêu cầu đổi thưởng</button>
 </div>
 <div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>CTV</th><th>Người mua</th><th>Đơn hàng</th><th>Giá trị</th><th>Hoa hồng</th><th>%</th><th>Status</th><th>Ngày</th><th>Actions</th></tr></thead><tbody id="cm-body"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
 
@@ -2012,8 +2127,14 @@ async function loadAdmComms(){
     const status=document.getElementById('cm-status')?.value||'';
     const d=await API.aff.comms(status?'status='+status:'');
     const tb=document.getElementById('cm-body');if(!tb)return;
-    if(!d.commissions.length){tb.innerHTML='<tr><td colspan="10" class="muted">Chưa có hoa hồng</td></tr>';return}
-    tb.innerHTML=d.commissions.map(c=>{
+    _amAll=d.commissions||[];_amPage=0;_renderAdmCommsPage();
+  }catch(e){toast(e.message,'err')}
+}
+function _renderAdmCommsPage(){
+  const tb=document.getElementById('cm-body');if(!tb)return;
+  if(!_amAll.length){tb.innerHTML='<tr><td colspan="10" class="muted">Chưa có hoa hồng</td></tr>';return}
+  const start=_amPage*_BP;const visible=_amAll.slice(start,start+_BP);
+  tb.innerHTML=visible.map(c=>{
       const dt=c.created_at?c.created_at.slice(0,16).replace('T',' '):'';
       const stBadge=c.status==='paid'?'<span style="color:var(--ok)">✓ Đã TT</span>':'<span style="color:var(--warn)">⏳ Chờ</span>';
       return `<tr>
@@ -2023,11 +2144,256 @@ async function loadAdmComms(){
         <td>${c.rate}%</td><td>${stBadge}</td><td class="sm">${dt}</td>
         <td class="acts">${c.status==='pending'?`<button class="btn-s" onclick="payComm(${c.id})" style="color:var(--ok)">💰 TT</button>`:''}</td>
       </tr>`}).join('');
-  }catch(e){toast(e.message,'err')}
+  const pg=tb.closest('.tbl-wrap');if(pg){let pgDiv=pg.nextElementSibling;if(!pgDiv||!pgDiv.classList.contains('am-pg')){pgDiv=document.createElement('div');pgDiv.className='am-pg';pg.after(pgDiv)}pgDiv.innerHTML=_pgHtml(_amPage,_amAll.length,'_amGoPage')}
 }
 
 async function payComm(id){
   try{await API.aff.updComm(id,{status:'paid'});toast('Đã thanh toán','ok');loadAdmComms()}catch(e){toast(e.message,'err')}
+}
+
+/* ========== BANK TRANSACTIONS — SUPERADMIN ========== */
+function renderAdmBank(){return `<div class="page-title">🏦 Ngân hàng ACB</div><div class="page-sub">Lịch sử giao dịch tài khoản ngân hàng (Web2M API)</div>
+<div class="stats-grid" id="bank-stats"><div class="spin-lg"></div></div>
+<div class="adm-toolbar" style="margin-top:16px">
+  <select id="bk-type" onchange="filterBankTx()"><option value="">Tất cả</option><option value="IN">Tiền vào</option><option value="OUT">Tiền ra</option></select>
+  <input id="bk-search" placeholder="Tìm nội dung..." oninput="filterBankTx()" style="max-width:250px">
+  <button class="btn-s" onclick="loadAdmBank()">🔄 Làm mới</button>
+</div>
+<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>Thời gian</th><th>Loại</th><th>Số tiền</th><th>Người gửi / Nội dung</th><th>Kênh</th></tr></thead><tbody id="bk-body"><tr><td colspan="6"><div class="spin-lg"></div></td></tr></tbody></table></div>
+<div id="bk-pg"></div>`}
+
+let _bankTxAll=[];
+let _bankPage=0;
+const _bankPP=50;
+
+async function loadAdmBank(){
+  const tb=document.getElementById('bk-body');
+  const sg=document.getElementById('bank-stats');
+  try{
+    if(tb)tb.innerHTML='<tr><td colspan="5"><div class="spin-lg"></div></td></tr>';
+    const d=await API.bank.transactions();
+    _bankTxAll=d.transactions||[];
+    // Stats
+    const totalIn=_bankTxAll.filter(t=>t.type==='IN').reduce((s,t)=>s+(t.amount||0),0);
+    const totalOut=_bankTxAll.filter(t=>t.type==='OUT').reduce((s,t)=>s+(t.amount||0),0);
+    const countIn=_bankTxAll.filter(t=>t.type==='IN').length;
+    const countOut=_bankTxAll.filter(t=>t.type==='OUT').length;
+    if(sg)sg.innerHTML=`<div class="glass-card stat-card"><div class="sv" style="color:var(--ok)">+${fmtVND(totalIn)}</div><div class="sl">Tổng tiền vào</div><div class="ss">${countIn} giao dịch</div></div><div class="glass-card stat-card"><div class="sv" style="color:var(--err)">-${fmtVND(totalOut)}</div><div class="sl">Tổng tiền ra</div><div class="ss">${countOut} giao dịch</div></div><div class="glass-card stat-card"><div class="sv">${fmtVND(totalIn-totalOut)}</div><div class="sl">Chênh lệch</div><div class="ss">${_bankTxAll.length} tổng GD</div></div>`;
+    _bankPage=0;
+    filterBankTx();
+  }catch(e){
+    if(sg)sg.innerHTML=`<p class="err">${e.message}</p>`;
+    if(tb)tb.innerHTML=`<tr><td colspan="5" class="err">${e.message}</td></tr>`;
+  }
+}
+
+function filterBankTx(){
+  const type=document.getElementById('bk-type')?.value||'';
+  const search=(document.getElementById('bk-search')?.value||'').toLowerCase();
+  let filtered=_bankTxAll;
+  if(type)filtered=filtered.filter(t=>t.type===type);
+  if(search)filtered=filtered.filter(t=>(t.description||'').toLowerCase().includes(search)||(t.senderName||'').toLowerCase().includes(search)||(t.receiverName||'').toLowerCase().includes(search));
+  _bankPage=0;
+  _renderBankTx(filtered);
+}
+
+function _bankGoPage(p){_bankPage=p;filterBankTx()}
+
+function _renderBankTx(items){
+  const tb=document.getElementById('bk-body');if(!tb)return;
+  if(!items.length){tb.innerHTML='<tr><td colspan="6" class="muted">Không có giao dịch</td></tr>';document.getElementById('bk-pg').innerHTML='';return}
+  const start=_bankPage*_bankPP;
+  const visible=items.slice(start,start+_bankPP);
+  tb.innerHTML=visible.map(t=>{
+    const isIn=t.type==='IN';
+    const amtCls=isIn?'color:var(--ok)':'color:var(--err)';
+    const sign=isIn?'+':'-';
+    const badge=isIn?'<span style="background:rgba(52,211,153,.12);color:var(--ok);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600">VÀO</span>':'<span style="background:rgba(248,113,113,.12);color:var(--err);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600">RA</span>';
+    // v3 uses postingDate (timestamp ms) or transactionDate (string)
+    let dateStr=t.transactionDate||'';
+    if(t.postingDate){const d=new Date(t.postingDate);dateStr=d.toLocaleString('vi-VN',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+    const txId=t.transactionNumber||t.transactionID||'';
+    const sender=t.senderName||t.receiverName||'';
+    return `<tr>
+      <td class="mono sm">${txId}</td>
+      <td class="sm" style="white-space:nowrap">${dateStr}</td>
+      <td>${badge}</td>
+      <td style="${amtCls};font-weight:600;white-space:nowrap">${sign}${(t.amount||0).toLocaleString('vi-VN')}₫</td>
+      <td class="sm">${sender?'<span style="color:var(--text2)">'+esc(sender)+'</span><br>':''}<span style="max-width:400px;word-break:break-word;display:inline-block">${esc(t.description||'')}</span></td>
+      <td class="sm">${t.isOnline?'Online':'Offline'}</td>
+    </tr>`}).join('');
+  document.getElementById('bk-pg').innerHTML=_pgHtml(_bankPage,items.length,'_bankGoPage');
+}
+
+/* ========== ADMIN REDEMPTIONS — SUPERADMIN ========== */
+function renderAdmRedemptions(){return `<div class="page-title">🎁 Yêu cầu đổi thưởng</div><div class="page-sub">Duyệt yêu cầu đổi ngày / rút tiền của CTV</div>
+<div class="adm-toolbar">
+  <select id="rd-status" onchange="loadAdmRedemptions()"><option value="">Tất cả</option><option value="pending">Chờ duyệt</option><option value="approved">Đã duyệt</option><option value="rejected">Từ chối</option></select>
+  <button class="btn-s" onclick="go('admin-comms')">← Hoa hồng</button>
+</div>
+<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>CTV</th><th>Loại</th><th>Số tiền</th><th>Ngày thêm</th><th>Status</th><th>Ngày tạo</th><th>Ghi chú</th><th>Actions</th></tr></thead><tbody id="rd-body"><tr><td colspan="9"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
+
+async function loadAdmRedemptions(){
+  try{
+    const status=document.getElementById('rd-status')?.value||'';
+    const d=await API.aff.redemptions(status?'status='+status:'');
+    const tb=document.getElementById('rd-body');if(!tb)return;
+    _arAll=d.redemptions||[];_arPage=0;_renderAdmRedemptionsPage();
+  }catch(e){toast(e.message,'err')}
+}
+function _renderAdmRedemptionsPage(){
+  const tb=document.getElementById('rd-body');if(!tb)return;
+  if(!_arAll.length){tb.innerHTML='<tr><td colspan="9" class="muted">Chưa có yêu cầu</td></tr>';return}
+  const start=_arPage*_BP;const visible=_arAll.slice(start,start+_BP);
+  tb.innerHTML=visible.map(r=>{
+      const typeBadge=r.type==='days'?'📅 Ngày':'💰 Tiền';
+      const stCls=r.status==='approved'?'color:var(--ok)':r.status==='rejected'?'color:var(--err)':'color:var(--warn)';
+      const stTxt=r.status==='approved'?'✓ Duyệt':r.status==='rejected'?'✕ Từ chối':'⏳ Chờ';
+      const acts=r.status==='pending'?`<button class="btn-s" onclick="approveRedemption(${r.id})" style="color:var(--ok)">✓ Duyệt</button><button class="btn-s danger" onclick="rejectRedemption(${r.id})">✕ Từ chối</button>`:'';
+      return `<tr><td>${r.id}</td><td class="sm">${r.affiliate_email||''}</td><td>${typeBadge}</td><td style="font-weight:600">${fmtVND(r.points_used)}</td><td>${r.days_added?r.days_added+' ngày':'-'}</td><td style="${stCls}">${stTxt}</td><td class="sm">${r.created_at?r.created_at.slice(0,10):'-'}</td><td class="sm">${r.note||''}</td><td class="acts">${acts}</td></tr>`}).join('');
+  const pg=tb.closest('.tbl-wrap');if(pg){let pgDiv=pg.nextElementSibling;if(!pgDiv||!pgDiv.classList.contains('ar-pg')){pgDiv=document.createElement('div');pgDiv.className='ar-pg';pg.after(pgDiv)}pgDiv.innerHTML=_pgHtml(_arPage,_arAll.length,'_arGoPage')}
+}
+
+async function approveRedemption(id){
+  if(!confirm('Duyệt yêu cầu này?'))return;
+  try{await API.aff.updRedemption(id,{status:'approved'});toast('Đã duyệt','ok');loadAdmRedemptions()}catch(e){toast(e.message,'err')}
+}
+
+async function rejectRedemption(id){
+  const note=prompt('Lý do từ chối (tùy chọn):');
+  try{await API.aff.updRedemption(id,{status:'rejected',note:note||''});toast('Đã từ chối','ok');loadAdmRedemptions()}catch(e){toast(e.message,'err')}
+}
+
+/* ========== MY AFFILIATE (CTV SELF-SERVICE) ========== */
+function renderMyAffiliate(){return `<div class="page-title">🤝 Dashboard CTV</div><div class="page-sub">Quản lý giới thiệu & hoa hồng của bạn</div>
+<div class="stats-grid" id="aff-stats"><div class="spin-lg"></div></div>
+<div class="prof-layout" style="margin-top:16px">
+  <div class="prof-left">
+    <div class="glass-card prof-card" id="aff-link-card"><div class="spin-lg"></div></div>
+    <div class="glass-card prof-card" id="aff-redeem-card"><div class="spin-lg"></div></div>
+  </div>
+  <div class="prof-right">
+    <div class="glass-card prof-card">
+      <div class="prof-section-title">📋 Lịch sử hoa hồng</div>
+      <div id="aff-comms"><div class="spin-lg"></div></div>
+    </div>
+    <div class="glass-card prof-card">
+      <div class="prof-section-title">🔄 Lịch sử đổi thưởng</div>
+      <div id="aff-redemptions"><div class="spin-lg"></div></div>
+    </div>
+    <div class="glass-card prof-card">
+      <div class="prof-section-title">👥 Danh sách giới thiệu</div>
+      <div id="aff-referrals"><div class="spin-lg"></div></div>
+    </div>
+  </div>
+</div>`}
+
+async function loadMyAffiliate(){
+  try{
+    const d=await API.myAff.dashboard();
+    const s=d.stats;
+    // Stats
+    const sg=document.getElementById('aff-stats');
+    if(sg)sg.innerHTML=`
+      <div class="stat-card"><div class="stat-val">${s.referralCount}</div><div class="stat-lbl">Người giới thiệu</div></div>
+      <div class="stat-card"><div class="stat-val">${s.referralBuyers}</div><div class="stat-lbl">Đã mua gói</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--ok)">${fmtVND(s.totalCommission)}</div><div class="stat-lbl">Tổng hoa hồng</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--warn)">${fmtVND(s.availableBalance)}</div><div class="stat-lbl">Số dư khả dụng</div></div>`;
+    // Link card
+    const lc=document.getElementById('aff-link-card');
+    if(lc)lc.innerHTML=`
+      <div class="prof-section-title">🔗 Link giới thiệu</div>
+      <div style="background:var(--card);padding:12px;border-radius:8px;margin:8px 0;word-break:break-all;font-family:monospace;font-size:12px;color:var(--accent)">${d.link}</div>
+      <button class="btn-primary" style="width:auto;padding:8px 20px" onclick="copyText('${d.link}')">📋 Copy link</button>
+      <div style="margin-top:12px;font-size:12px;color:var(--text2);line-height:1.6">
+        <div>Mã giới thiệu: <span style="color:var(--accent);font-weight:600">${d.ref_code}</span></div>
+        <div>Tỷ lệ hoa hồng: <span style="color:var(--ok);font-weight:600">${d.commission_rate}%</span></div>
+        <div style="margin-top:8px;color:var(--text3)">Chia sẻ link này cho bạn bè. Khi họ đăng ký và mua gói, bạn nhận ${d.commission_rate}% hoa hồng.</div>
+      </div>`;
+    // Redeem card
+    const rc=document.getElementById('aff-redeem-card');
+    const ppd=s.pointsPerDay;
+    const maxDays=Math.floor(s.availableBalance/ppd);
+    if(rc)rc.innerHTML=`
+      <div class="prof-section-title">🎁 Đổi thưởng</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">
+        Số dư: <span style="color:var(--warn);font-weight:600">${fmtVND(s.availableBalance)}</span><br>
+        Quy đổi: ${fmtVND(ppd)}/ngày (tối đa ${maxDays} ngày)
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="background:var(--card);padding:14px;border-radius:10px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">📅 Đổi ngày sử dụng</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" id="aff-days" min="1" max="${maxDays||0}" value="${Math.min(maxDays,7)||0}" placeholder="Số ngày" style="width:80px">
+            <span style="font-size:12px;color:var(--text3)" id="aff-days-cost">= ${fmtVND(Math.min(maxDays,7)*ppd)}</span>
+            <button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12px" onclick="redeemDays()" ${s.availableBalance<ppd?'disabled':''}>Đổi</button>
+          </div>
+        </div>
+        <div style="background:var(--card);padding:14px;border-radius:10px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">💰 Rút tiền mặt</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" id="aff-cash" min="50000" step="10000" value="${Math.min(s.availableBalance,50000)||0}" placeholder="Số tiền" style="width:120px">
+            <button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12px" onclick="redeemCash()" ${s.availableBalance<50000?'disabled':''}>Yêu cầu rút</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px">Tối thiểu 50,000₫. Cần admin duyệt.</div>
+        </div>
+      </div>`;
+    // Update days cost on input change
+    const daysInp=document.getElementById('aff-days');
+    if(daysInp)daysInp.addEventListener('input',function(){const dc=document.getElementById('aff-days-cost');if(dc)dc.textContent='= '+fmtVND((parseInt(this.value)||0)*ppd)});
+    // Commissions
+    const ce=document.getElementById('aff-comms');
+    if(ce){
+      _myAffComms=d.commissions||[];_myAffCommsPage=0;_renderMyAffComms();
+    }
+    // Redemptions
+    const re=document.getElementById('aff-redemptions');
+    if(re){
+      if(!d.redemptions.length){re.innerHTML='<div class="muted" style="padding:10px">Chưa có yêu cầu đổi thưởng</div>'}
+      else{re.innerHTML=`<table class="adm-tbl"><thead><tr><th>Loại</th><th>Số tiền</th><th>Ngày thêm</th><th>Status</th><th>Ngày tạo</th></tr></thead><tbody>${d.redemptions.map(r=>{
+        const typeBadge=r.type==='days'?'📅 Ngày':'💰 Tiền';
+        const stCls=r.status==='approved'?'color:var(--ok)':r.status==='rejected'?'color:var(--err)':'color:var(--warn)';
+        const stTxt=r.status==='approved'?'✓ Duyệt':r.status==='rejected'?'✕ Từ chối':'⏳ Chờ';
+        return `<tr><td>${typeBadge}</td><td>${fmtVND(r.points_used)}</td><td>${r.days_added?r.days_added+' ngày':'-'}</td><td style="${stCls}">${stTxt}</td><td class="sm">${r.created_at?r.created_at.slice(0,10):'-'}</td></tr>`}).join('')}</tbody></table>`}
+    }
+    // Referrals
+    const rf=document.getElementById('aff-referrals');
+    if(rf){
+      _myAffRefs=d.referrals||[];_myAffRefsPage=0;_renderMyAffRefs();
+    }
+  }catch(e){toast(e.message,'err')}
+}
+
+function _renderMyAffComms(){
+  const ce=document.getElementById('aff-comms');if(!ce)return;
+  if(!_myAffComms.length){ce.innerHTML='<div class="muted" style="padding:10px">Chưa có hoa hồng</div>';return}
+  const start=_myAffCommsPage*_BP;const visible=_myAffComms.slice(start,start+_BP);
+  ce.innerHTML=`<table class="adm-tbl"><thead><tr><th>Người mua</th><th>Giá trị</th><th>Hoa hồng</th><th>Status</th><th>Ngày</th></tr></thead><tbody>${visible.map(c=>{
+    const stBadge=c.status==='paid'?'<span style="color:var(--ok)">✓ Đã TT</span>':'<span style="color:var(--warn)">⏳ Chờ</span>';
+    return `<tr><td class="sm">${c.buyer_email}</td><td>${fmtVND(c.amount)}</td><td style="font-weight:600;color:var(--ok)">${fmtVND(c.commission)}</td><td>${stBadge}</td><td class="sm">${c.created_at?c.created_at.slice(0,10):'-'}</td></tr>`}).join('')}</tbody></table>`+_pgHtml(_myAffCommsPage,_myAffComms.length,'_myAffCommsGoPage');
+}
+function _renderMyAffRefs(){
+  const rf=document.getElementById('aff-referrals');if(!rf)return;
+  if(!_myAffRefs.length){rf.innerHTML='<div class="muted" style="padding:10px">Chưa có ai đăng ký qua link của bạn</div>';return}
+  const start=_myAffRefsPage*_BP;const visible=_myAffRefs.slice(start,start+_BP);
+  rf.innerHTML=`<table class="adm-tbl"><thead><tr><th>Email</th><th>Tên</th><th>Gói</th><th>HH kiếm được</th><th>Ngày ĐK</th></tr></thead><tbody>${visible.map(r=>{
+    return `<tr><td class="sm">${r.email}</td><td>${r.name||'-'}</td><td><span class="badge">${planName(r.plan)}</span></td><td style="color:var(--ok)">${fmtVND(r.earned)}</td><td class="sm">${r.created_at?r.created_at.slice(0,10):'-'}</td></tr>`}).join('')}</tbody></table>`+_pgHtml(_myAffRefsPage,_myAffRefs.length,'_myAffRefsGoPage');
+}
+
+async function redeemDays(){
+  const days=parseInt(document.getElementById('aff-days')?.value)||0;
+  if(days<1){toast('Nhập số ngày','err');return}
+  const ppd=14286;
+  const amount=days*ppd;
+  if(!confirm(`Đổi ${fmtVND(amount)} → ${days} ngày sử dụng?`))return;
+  try{const d=await API.myAff.redeem({type:'days',amount});toast(d.message,'ok');loadMyAffiliate()}catch(e){toast(e.message,'err')}
+}
+
+async function redeemCash(){
+  const amount=parseInt(document.getElementById('aff-cash')?.value)||0;
+  if(amount<50000){toast('Tối thiểu 50,000₫','err');return}
+  if(!confirm(`Yêu cầu rút ${fmtVND(amount)}?`))return;
+  try{const d=await API.myAff.redeem({type:'cash',amount});toast(d.message,'ok');loadMyAffiliate()}catch(e){toast(e.message,'err')}
 }
 
 /* ========== MODAL UTIL ========== */

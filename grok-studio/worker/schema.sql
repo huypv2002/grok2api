@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   name TEXT DEFAULT '',
   role TEXT DEFAULT 'user' CHECK(role IN ('user','admin')),
-  plan TEXT DEFAULT 'free' CHECK(plan IN ('free','basic','pro','unlimited')),
+  plan TEXT DEFAULT 'free',
   credits INTEGER DEFAULT 10,
   daily_limit INTEGER DEFAULT -1,
   video_limit INTEGER DEFAULT -1,
@@ -62,3 +62,28 @@ INSERT OR IGNORE INTO plans (id, name, price, credits_per_month, max_accounts, d
   ('basic', 'Basic', 9.99, 100, 3, 30, 10, '{"text2image":true,"image2image":true,"text2video":true,"image2video":false,"extend_video":false}'),
   ('pro', 'Pro', 29.99, 500, 10, 100, 50, '{"text2image":true,"image2image":true,"text2video":true,"image2video":true,"extend_video":true}'),
   ('unlimited', 'Unlimited', 99.99, -1, 50, -1, -1, '{"text2image":true,"image2image":true,"text2video":true,"image2video":true,"extend_video":true}');
+
+-- Service plans (pricing plans for payment)
+CREATE TABLE IF NOT EXISTS service_plans (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  tier TEXT NOT NULL DEFAULT 'Starter',
+  duration TEXT NOT NULL DEFAULT 'month',
+  price INTEGER NOT NULL DEFAULT 0,
+  days INTEGER NOT NULL DEFAULT 30,
+  accs INTEGER NOT NULL DEFAULT 1,
+  save_text TEXT DEFAULT '',
+  popular INTEGER DEFAULT 0,
+  sort_order INTEGER DEFAULT 0,
+  active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Seed service plans
+INSERT OR IGNORE INTO service_plans (id, name, tier, duration, price, days, accs, save_text, popular, sort_order) VALUES
+  ('month1',  'Tháng - Starter',    'Starter',  'month',  149000,  30, 1,  '',               0, 1),
+  ('month5',  'Tháng - Pro',        'Pro',      'month',  245000,  30, 5,  '',               1, 2),
+  ('month10', 'Tháng - Business',   'Business', 'month',  349000,  30, 10, '',               0, 3),
+  ('3month1', '3 Tháng - Starter',  'Starter',  '3month', 399000,  90, 1,  'Tiết kiệm 11%', 0, 4),
+  ('3month5', '3 Tháng - Pro',      'Pro',      '3month', 699000,  90, 5,  'Tiết kiệm 5%',  1, 5),
+  ('3month10','3 Tháng - Business', 'Business', '3month', 999000,  90, 10, 'Tiết kiệm 5%',  0, 6);

@@ -161,7 +161,7 @@ export async function handleAdmin(request, env, user, path) {
   }
 
   // ===== PLANS MANAGEMENT =====
-  // PUT /api/admin/plans/:id
+  // PUT /api/admin/plans/:id (old plans table)
   const planMatch = path.match(/^\/api\/admin\/plans\/(\w+)$/);
   if (request.method === 'PUT' && planMatch) {
     const id = planMatch[1];
@@ -179,6 +179,57 @@ export async function handleAdmin(request, env, user, path) {
     params.push(id);
     await env.DB.prepare(`UPDATE plans SET ${sets.join(', ')} WHERE id = ?`).bind(...params).run();
     return jsonResponse({ message: 'Plan updated' });
+  }
+
+  // ===== SERVICE PLANS (pricing plans) =====
+  // GET /api/admin/service-plans
+  if (request.method === 'GET' && path === '/api/admin/service-plans') {
+    const rows = await env.DB.prepare('SELECT * FROM service_plans ORDER BY sort_order ASC').all();
+    return jsonResponse({ plans: rows.results });
+  }
+
+  // PUT /api/admin/service-plans/:id
+  const spMatch = path.match(/^\/api\/admin\/service-plans\/([\w-]+)$/);
+  if (request.method === 'PUT' && spMatch) {
+    const id = spMatch[1];
+    const body = await request.json();
+    const sets = [];
+    const params = [];
+    if (body.name !== undefined) { sets.push('name = ?'); params.push(body.name); }
+    if (body.tier !== undefined) { sets.push('tier = ?'); params.push(body.tier); }
+    if (body.duration !== undefined) { sets.push('duration = ?'); params.push(body.duration); }
+    if (body.price !== undefined) { sets.push('price = ?'); params.push(body.price); }
+    if (body.days !== undefined) { sets.push('days = ?'); params.push(body.days); }
+    if (body.accs !== undefined) { sets.push('accs = ?'); params.push(body.accs); }
+    if (body.save_text !== undefined) { sets.push('save_text = ?'); params.push(body.save_text); }
+    if (body.popular !== undefined) { sets.push('popular = ?'); params.push(body.popular ? 1 : 0); }
+    if (body.sort_order !== undefined) { sets.push('sort_order = ?'); params.push(body.sort_order); }
+    if (body.active !== undefined) { sets.push('active = ?'); params.push(body.active ? 1 : 0); }
+    if (sets.length === 0) return jsonResponse({ error: 'No fields' }, 400);
+    params.push(id);
+    await env.DB.prepare(`UPDATE service_plans SET ${sets.join(', ')} WHERE id = ?`).bind(...params).run();
+    return jsonResponse({ message: 'Service plan updated' });
+  }
+
+  // POST /api/admin/service-plans — create new plan
+  if (request.method === 'POST' && path === '/api/admin/service-plans') {
+    const body = await request.json();
+    const { id, name, tier, duration, price, days, accs, save_text, popular } = body;
+    if (!id || !name) return jsonResponse({ error: 'id and name required' }, 400);
+    const existing = await env.DB.prepare('SELECT id FROM service_plans WHERE id = ?').bind(id).first();
+    if (existing) return jsonResponse({ error: 'Plan ID already exists' }, 409);
+    const maxSort = await env.DB.prepare('SELECT MAX(sort_order) as m FROM service_plans').first();
+    await env.DB.prepare(
+      'INSERT INTO service_plans (id, name, tier, duration, price, days, accs, save_text, popular, sort_order, active) VALUES (?,?,?,?,?,?,?,?,?,?,1)'
+    ).bind(id, name, tier || 'Starter', duration || 'month', price || 0, days || 30, accs || 1, save_text || '', popular ? 1 : 0, (maxSort?.m || 0) + 1).run();
+    return jsonResponse({ message: 'Plan created' });
+  }
+
+  // DELETE /api/admin/service-plans/:id
+  if (request.method === 'DELETE' && spMatch) {
+    const id = spMatch[1];
+    await env.DB.prepare('DELETE FROM service_plans WHERE id = ?').bind(id).run();
+    return jsonResponse({ message: 'Plan deleted' });
   }
 
   // ===== CREATE USER =====
@@ -303,14 +354,12 @@ export async function handleAdmin(request, env, user, path) {
     if (body.status === 'completed') {
       const order = await env.DB.prepare('SELECT * FROM payment_orders WHERE id = ?').bind(id).first();
       if (order) {
-        const PLAN_DAYS = {
-          'week3': 7, 'week5': 7, 'week10': 7,
-          'month3': 30, 'month5': 30, 'month10': 30,
-          '3month3': 90, '3month5': 90, '3month10': 90
-        };
-        const days = PLAN_DAYS[order.plan_id] || 30;
+        // Read plan from DB
+        const planRow = await env.DB.prepare('SELECT * FROM service_plans WHERE id = ?').bind(order.plan_id).first();
+        const days = planRow ? planRow.days : 30;
+        const price = planRow ? planRow.price : (order.amount || 0);
         const now = new Date();
-        const currentUser = await env.DB.prepare('SELECT plan_expires FROM users WHERE id = ?').bind(order.user_id).first();
+        const currentUser = await env.DB.prepare('SELECT plan_expires, referred_by FROM users WHERE id = ?').bind(order.user_id).first();
         let startDate = now;
         if (currentUser?.plan_expires) {
           const exp = new Date(currentUser.plan_expires);
@@ -320,14 +369,30 @@ export async function handleAdmin(request, env, user, path) {
         await env.DB.prepare(
           `UPDATE users SET plan = ?, daily_limit = -1, video_limit = -1, credits = -1, plan_expires = ?, updated_at = datetime('now') WHERE id = ?`
         ).bind(order.plan_id, expiresAt, order.user_id).run();
+
+        // Record commission if user was referred
+        if (currentUser?.referred_by) {
+          const affiliate = await env.DB.prepare('SELECT id, commission_rate, is_affiliate FROM users WHERE id = ? AND is_affiliate = 1').bind(currentUser.referred_by).first();
+          if (affiliate) {
+            const rate = affiliate.commission_rate || 20;
+            const commission = Math.round(price * rate / 100);
+            if (commission > 0) {
+              await env.DB.prepare(
+                "INSERT INTO commissions (affiliate_id, order_id, buyer_id, amount, commission, rate, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'))"
+              ).bind(affiliate.id, order.id, order.user_id, price, commission, rate).run();
+            }
+          }
+        }
       }
     }
 
     return jsonResponse({ message: 'Updated' });
   }
 
-  // DELETE /api/admin/payments/:id
+  // DELETE /api/admin/payments/:id (superadmin only)
   if (request.method === 'DELETE' && payMatch) {
+    const denied = requireSuperAdmin(user);
+    if (denied) return denied;
     const id = parseInt(payMatch[1]);
     await env.DB.prepare('DELETE FROM payment_orders WHERE id = ?').bind(id).run();
     return jsonResponse({ message: 'Deleted' });
@@ -463,6 +528,88 @@ export async function handleAdmin(request, env, user, path) {
       "UPDATE commissions SET status = 'paid', paid_at = datetime('now') WHERE affiliate_id = ? AND status = 'pending'"
     ).bind(affiliate_id).run();
     return jsonResponse({ message: 'Đã thanh toán tất cả', count: result.meta.changes });
+  }
+
+  // ===== REDEMPTION MANAGEMENT (superadmin) =====
+  // GET /api/admin/redemptions
+  if (request.method === 'GET' && path === '/api/admin/redemptions') {
+    const denied2 = requireSuperAdmin(user);
+    if (denied2) return denied2;
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status') || '';
+    let query = `SELECT r.*, u.email as affiliate_email, u.name as affiliate_name FROM redemptions r JOIN users u ON r.affiliate_id = u.id WHERE 1=1`;
+    const params = [];
+    if (status) { query += ' AND r.status = ?'; params.push(status); }
+    query += ' ORDER BY r.created_at DESC LIMIT 100';
+    const rows = await env.DB.prepare(query).bind(...params).all();
+    return jsonResponse({ redemptions: rows.results });
+  }
+
+  // PUT /api/admin/redemptions/:id — approve/reject
+  const redeemMatch = path.match(/^\/api\/admin\/redemptions\/(\d+)$/);
+  if (request.method === 'PUT' && redeemMatch) {
+    const denied2 = requireSuperAdmin(user);
+    if (denied2) return denied2;
+    const id = parseInt(redeemMatch[1]);
+    const body = await request.json();
+    if (!['approved', 'rejected'].includes(body.status)) return jsonResponse({ error: 'Status phải là approved hoặc rejected' }, 400);
+
+    const redemption = await env.DB.prepare('SELECT * FROM redemptions WHERE id = ?').bind(id).first();
+    if (!redemption) return jsonResponse({ error: 'Không tìm thấy' }, 404);
+    if (redemption.status !== 'pending') return jsonResponse({ error: 'Đã xử lý rồi' }, 400);
+
+    if (body.status === 'rejected') {
+      // Refund: re-create pending commissions for the amount
+      await env.DB.prepare(
+        "INSERT INTO commissions (affiliate_id, order_id, buyer_id, amount, commission, rate, status, created_at) VALUES (?, 0, ?, 0, ?, 0, 'pending', datetime('now'))"
+      ).bind(redemption.affiliate_id, redemption.affiliate_id, redemption.points_used).run();
+    }
+
+    if (body.status === 'approved' && redemption.type === 'cash') {
+      // Deduct commissions for cash withdrawal
+      let remaining = redemption.points_used;
+      const pending = await env.DB.prepare(
+        "SELECT id, commission FROM commissions WHERE affiliate_id = ? AND status = 'pending' ORDER BY created_at ASC"
+      ).bind(redemption.affiliate_id).all();
+      for (const c of pending.results) {
+        if (remaining <= 0) break;
+        if (c.commission <= remaining) {
+          await env.DB.prepare("UPDATE commissions SET status = 'paid', paid_at = datetime('now') WHERE id = ?").bind(c.id).run();
+          remaining -= c.commission;
+        } else {
+          const leftover = c.commission - remaining;
+          await env.DB.prepare("UPDATE commissions SET commission = ? WHERE id = ?").bind(leftover, c.id).run();
+          remaining = 0;
+        }
+      }
+    }
+
+    await env.DB.prepare(
+      "UPDATE redemptions SET status = ?, processed_at = datetime('now'), note = ? WHERE id = ?"
+    ).bind(body.status, body.note || '', id).run();
+
+    return jsonResponse({ message: body.status === 'approved' ? 'Đã duyệt' : 'Đã từ chối' });
+  }
+
+  // ===== BANK TRANSACTIONS (superadmin only) =====
+  // GET /api/admin/bank-transactions — fetch from Web2M API v3
+  if (request.method === 'GET' && path === '/api/admin/bank-transactions') {
+    const denied2 = requireSuperAdmin(user);
+    if (denied2) return denied2;
+    const { ACB_PASSWORD, ACB_ACCOUNT, ACB_API_TOKEN } = env;
+    if (!ACB_PASSWORD || !ACB_ACCOUNT || !ACB_API_TOKEN || ACB_PASSWORD === 'CHANGE_ME') {
+      return jsonResponse({ error: 'ACB API chưa cấu hình. Cập nhật ACB_PASSWORD và ACB_API_TOKEN trong wrangler.toml' }, 500);
+    }
+    try {
+      const apiUrl = `https://api.web2m.com/historyapiacb/${ACB_PASSWORD}/${ACB_ACCOUNT}/${ACB_API_TOKEN}`;
+      const resp = await fetch(apiUrl);
+      if (!resp.ok) return jsonResponse({ error: 'Web2M API error: HTTP ' + resp.status }, 502);
+      const data = await resp.json();
+      if (!data.success && !data.status) return jsonResponse({ error: data.message || 'Web2M API failed' }, 502);
+      return jsonResponse({ transactions: data.transactions || [], total: data.total || 0 });
+    } catch (e) {
+      return jsonResponse({ error: 'Lỗi kết nối Web2M: ' + e.message }, 502);
+    }
   }
 
   return jsonResponse({ error: 'Not found' }, 404);

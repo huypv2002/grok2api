@@ -1,23 +1,18 @@
 import { jsonResponse, corsHeaders } from '../utils/response.js';
 
-const ACB_ACCOUNT = '24718711';
-const ACB_NAME = 'Pham Van Huy';
+const ACB_ACCOUNT = '24876591';
+const ACB_NAME = 'NGUYEN VAN VIET';
 
-const PLANS = {
-  'week3':   { name: 'Tuần - Starter',    price: 79000,   days: 7,  accs: 3  },
-  'week5':   { name: 'Tuần - Pro',         price: 129000,  days: 7,  accs: 5  },
-  'week10':  { name: 'Tuần - Business',    price: 199000,  days: 7,  accs: 10 },
-  'month3':  { name: 'Tháng - Starter',    price: 199000,  days: 30, accs: 3  },
-  'month5':  { name: 'Tháng - Pro',        price: 349000,  days: 30, accs: 5  },
-  'month10': { name: 'Tháng - Business',   price: 549000,  days: 30, accs: 10 },
-  '3month3': { name: '3 Tháng - Starter',  price: 499000,  days: 90, accs: 3  },
-  '3month5': { name: '3 Tháng - Pro',      price: 899000,  days: 90, accs: 5  },
-  '3month10':{ name: '3 Tháng - Business', price: 1399000, days: 90, accs: 10 },
-};
+// Helper: load plan from DB
+async function getPlan(env, planId) {
+  const row = await env.DB.prepare('SELECT * FROM service_plans WHERE id = ? AND active = 1').bind(planId).first();
+  if (!row) return null;
+  return { name: row.name, price: row.price, days: row.days, accs: row.accs };
+}
 
 // Upgrade user plan helper
-async function upgradePlan(env, userId, planId, transactionRef) {
-  const plan = PLANS[planId];
+async function upgradePlan(env, userId, planId, orderId) {
+  const plan = await getPlan(env, planId);
   if (!plan) return null;
 
   const now = new Date();
@@ -39,11 +34,9 @@ async function upgradePlan(env, userId, planId, transactionRef) {
     if (affiliate) {
       const rate = affiliate.commission_rate || 20;
       const commission = Math.round(plan.price * rate / 100);
-      // Get order id
-      const order = await env.DB.prepare("SELECT id FROM payment_orders WHERE user_id = ? AND plan_id = ? AND status = 'completed' ORDER BY id DESC LIMIT 1").bind(userId, planId).first();
       await env.DB.prepare(
         "INSERT INTO commissions (affiliate_id, order_id, buyer_id, amount, commission, rate, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'))"
-      ).bind(affiliate.id, order?.id || 0, userId, plan.price, commission, rate).run();
+      ).bind(affiliate.id, orderId || 0, userId, plan.price, commission, rate).run();
     }
   }
 
@@ -89,7 +82,7 @@ export async function handleWebhook(request, env) {
     for (const order of pendingOrders.results) {
       if (desc.includes(order.memo_code.toUpperCase()) && amount >= order.amount) {
         // Match found — upgrade user
-        const expiresAt = await upgradePlan(env, order.user_id, order.plan_id, txRef);
+        const expiresAt = await upgradePlan(env, order.user_id, order.plan_id, order.id);
         if (expiresAt) {
           await env.DB.prepare(
             `UPDATE payment_orders SET status = 'completed', completed_at = datetime('now'), transaction_ref = ? WHERE id = ?`
@@ -112,7 +105,7 @@ export async function handlePayment(request, env, user, path) {
   // POST /api/payment/create
   if (path === '/api/payment/create' && request.method === 'POST') {
     const { plan_id } = await request.json();
-    const plan = PLANS[plan_id];
+    const plan = await getPlan(env, plan_id);
     if (!plan) return jsonResponse({ error: 'Gói không hợp lệ' }, 400);
 
     const code = 'GS' + userId + Date.now().toString(36).toUpperCase();
