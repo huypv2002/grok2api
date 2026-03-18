@@ -182,6 +182,9 @@ class VideoExtendService:
         if not video_url:
             raise UpstreamException("Video extension failed: missing video URL")
 
+        # Extract post_id from the collect result for extend chaining
+        new_post_id = result.get("post_id", "") or ""
+
         model_info = ModelService.get(VIDEO_MODEL_ID)
         effort = (
             EffortType.HIGH
@@ -194,7 +197,7 @@ class VideoExtendService:
             logger.warning(f"Failed to record video usage: {e}")
 
         now = int(time.time())
-        return {
+        resp = {
             "id": f"video_{uuid.uuid4().hex[:24]}",
             "object": "video",
             "created_at": now,
@@ -208,6 +211,9 @@ class VideoExtendService:
             "resolution": resolution_name,
             "url": video_url,
         }
+        if new_post_id:
+            resp["post_id"] = new_post_id
+        return resp
 
 
 __all__ = ["VideoExtendService"]

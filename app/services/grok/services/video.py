@@ -1229,7 +1229,7 @@ class VideoCollectProcessor:
                 result.thumbnail_url,
             )
 
-            return {
+            resp = {
                 "id": result.response_id,
                 "object": "chat.completion",
                 "created": int(time.time()),
@@ -1247,6 +1247,9 @@ class VideoCollectProcessor:
                 ],
                 "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
             }
+            if result.post_id:
+                resp["post_id"] = result.post_id
+            return resp
         finally:
             await self.close()
 
