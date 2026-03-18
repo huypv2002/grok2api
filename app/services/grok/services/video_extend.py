@@ -9,8 +9,9 @@ from typing import Any, Dict, Optional
 
 from app.core.exceptions import AppException, ErrorType, UpstreamException, ValidationException
 from app.core.logger import logger
+from app.core.config import get_config
 from app.services.grok.services.model import ModelService
-from app.services.grok.services.video import VideoCollectProcessor
+from app.services.grok.services.video import VideoCollectProcessor, _get_video_semaphore
 from app.services.reverse.app_chat import AppChatReverse
 from app.services.reverse.utils.session import ResettableSession
 from app.services.token import EffortType, get_token_manager
@@ -161,15 +162,18 @@ class VideoExtendService:
         }
 
         # Direct app-chat call for extension path (no auto step splitting).
-        session = ResettableSession()
-        response = await AppChatReverse.request(
-            session,
-            token,
-            message=f"{prompt} --mode=custom",
-            model="grok-3",
-            tool_overrides={"videoGen": True},
-            model_config_override=model_config_override,
-        )
+        # Use browser impersonation from config (same as text2video flow)
+        browser = get_config("proxy.browser")
+        session = ResettableSession(impersonate=browser) if browser else ResettableSession()
+        async with _get_video_semaphore():
+            response = await AppChatReverse.request(
+                session,
+                token,
+                message=f"{prompt} --mode=custom",
+                model="grok-3",
+                tool_overrides={"videoGen": True},
+                model_config_override=model_config_override,
+            )
 
         result = await VideoCollectProcessor(VIDEO_MODEL_ID, token).process(response)
         choices = result.get("choices") if isinstance(result, dict) else None
