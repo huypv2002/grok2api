@@ -383,7 +383,7 @@ function _restoreVpForm(){
 }
 function renderVideoProject(){
   const lenOpts='<option value="6">6s / clip (tối đa 5 cảnh = 30s)</option><option value="10">10s / clip (tối đa 3 cảnh = 30s)</option>';
-  return `<div class="page-title">🎬 Video Project</div><div class="page-sub">Tạo video dài bằng cách ghép nhiều cảnh, hoặc kéo dài video có sẵn.</div>
+  return `<div class="page-title">🎬 Kéo Dài Video</div><div class="page-sub">Tạo video dài bằng cách ghép nhiều cảnh, hoặc kéo dài video có sẵn.</div>
 <div class="gen-layout"><div class="gen-left glass-card gen-form">
 <div class="fg" style="margin-bottom:12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="vp-extend-mode" onchange="toggleVpExtend()" style="width:16px;height:16px"> Kéo dài từ video có sẵn (nhập Reference ID)</label></div>
 <div id="vp-extend-fields" style="display:none"><div class="fg"><label>ID Tham Chiếu</label><input id="vp-ref" placeholder="Nhập Reference ID của video gốc"></div><div class="fg"><label>Bắt đầu từ giây</label><input type="number" id="vp-st" value="0" min="0" step="0.1"></div></div>
@@ -483,7 +483,7 @@ async function startVideoProject(){
   };
   _vpUpdate();
   const sessId='vp_'+Date.now();
-  const sessName='Video Project '+new Date().toLocaleString('vi-VN');
+  const sessName='Kéo Dài Video '+new Date().toLocaleString('vi-VN');
   const payload={prompts:clips,aspect_ratio:ar,video_length:len,resolution:res,session_id:sessId,session_name:sessName};
   if(isExtendMode){payload.reference_id=extRef;payload.start_time=extSt}
   try{
