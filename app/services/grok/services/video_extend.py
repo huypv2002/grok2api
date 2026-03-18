@@ -165,17 +165,24 @@ class VideoExtendService:
         # Use browser impersonation from config (same as text2video flow)
         browser = get_config("proxy.browser")
         session = ResettableSession(impersonate=browser) if browser else ResettableSession()
-        async with _get_video_semaphore():
-            response = await AppChatReverse.request(
-                session,
-                token,
-                message=f"{prompt} --mode=custom",
-                model="grok-3",
-                tool_overrides={"videoGen": True},
-                model_config_override=model_config_override,
-            )
-
-        result = await VideoCollectProcessor(VIDEO_MODEL_ID, token).process(response)
+        try:
+            async with _get_video_semaphore():
+                response = await AppChatReverse.request(
+                    session,
+                    token,
+                    message=f"{prompt} --mode=custom",
+                    model="grok-3",
+                    tool_overrides={"videoGen": True},
+                    model_config_override=model_config_override,
+                )
+                logger.info(f"VideoExtend: AppChat response received, collecting result...")
+                result = await VideoCollectProcessor(VIDEO_MODEL_ID, token).process(response)
+                logger.info(f"VideoExtend: Collect done, keys={list(result.keys()) if isinstance(result, dict) else type(result)}")
+        finally:
+            try:
+                await session.close()
+            except Exception:
+                pass
         choices = result.get("choices") if isinstance(result, dict) else None
         if not isinstance(choices, list) or not choices:
             raise UpstreamException("Video extension failed: empty result")
