@@ -1,6 +1,6 @@
 import { handleAuth } from './routes/auth.js';
 import { handleAccounts } from './routes/accounts.js';
-import { handleGenerate } from './routes/generate.js';
+import { handleGenerate, handleVideoProject } from './routes/generate.js';
 import { handleHistory } from './routes/history.js';
 import { handlePlans } from './routes/plans.js';
 import { handleAdmin } from './routes/admin.js';
@@ -34,6 +34,17 @@ export default {
         return handlePlans(request, env);
       }
 
+      // Public: Get affiliate info by ref code (for welcome popup)
+      if (path === '/api/ref-info' && request.method === 'GET') {
+        const code = url.searchParams.get('code');
+        if (!code) return jsonResponse({ error: 'Thiếu mã giới thiệu' }, 400);
+        const aff = await env.DB.prepare(
+          'SELECT name, email FROM users WHERE ref_code = ? AND is_affiliate = 1'
+        ).bind(code).first();
+        if (!aff) return jsonResponse({ error: 'Không tìm thấy' }, 404);
+        return jsonResponse({ name: aff.name || aff.email.split('@')[0], ref_code: code });
+      }
+
       // Public: Web2M webhook (no JWT needed)
       if (path === '/api/webhook/web2m' && request.method === 'POST') {
         return handleWebhook(request, env);
@@ -42,9 +53,9 @@ export default {
       // Public: Serve media from R2
       if (path.startsWith('/api/media/') && request.method === 'GET') {
         const key = path.replace('/api/media/', '');
-        if (!key || !env.MEDIA) return jsonResponse({ error: 'Not found' }, 404);
+        if (!key || !env.MEDIA) return jsonResponse({ error: 'Không tìm thấy' }, 404);
         const obj = await env.MEDIA.get(key);
-        if (!obj) return jsonResponse({ error: 'File not found' }, 404);
+        if (!obj) return jsonResponse({ error: 'Không tìm thấy file' }, 404);
         return new Response(obj.body, {
           headers: {
             ...corsHeaders(),
@@ -58,7 +69,7 @@ export default {
       if (path === '/api/internal/sso-tokens' && request.method === 'GET') {
         const key = request.headers.get('X-Internal-Key');
         if (!key || key !== env.INTERNAL_KEY) {
-          return jsonResponse({ error: 'Forbidden' }, 403);
+          return jsonResponse({ error: 'Không có quyền' }, 403);
         }
         const rows = await env.DB.prepare(
           "SELECT sso_token FROM grok_accounts WHERE status = 'active' LIMIT 50"
@@ -80,7 +91,7 @@ export default {
       // Protected routes - verify JWT
       const user = await verifyJWT(request, env);
       if (!user) {
-        return jsonResponse({ error: 'Unauthorized' }, 401);
+        return jsonResponse({ error: 'Chưa đăng nhập' }, 401);
       }
       // Single-device enforcement: session was invalidated by another login
       if (user._kicked) {
@@ -89,6 +100,9 @@ export default {
 
       if (path.startsWith('/api/accounts')) {
         return handleAccounts(request, env, user, path);
+      }
+      if (path === '/api/generate/project') {
+        return handleVideoProject(request, env, user, ctx);
       }
       if (path.startsWith('/api/generate')) {
         return handleGenerate(request, env, user, path);
@@ -111,7 +125,7 @@ export default {
         const body = await request.json();
         const targetUrl = body.url;
         if (!targetUrl || !targetUrl.startsWith('http')) {
-          return jsonResponse({ error: 'Invalid URL' }, 400);
+          return jsonResponse({ error: 'URL không hợp lệ' }, 400);
         }
         try {
           const resp = await fetch(targetUrl);
@@ -125,14 +139,14 @@ export default {
             }
           });
         } catch (e) {
-          return jsonResponse({ error: 'Proxy fetch failed: ' + e.message }, 502);
+          return jsonResponse({ error: 'Tải proxy thất bại: ' + e.message }, 502);
         }
       }
 
-      return jsonResponse({ error: 'Not found' }, 404);
+      return jsonResponse({ error: 'Không tìm thấy' }, 404);
     } catch (err) {
       console.error('Worker error:', err);
-      return jsonResponse({ error: err.message || 'Internal error' }, 500);
+      return jsonResponse({ error: err.message || 'Lỗi hệ thống' }, 500);
     }
   }
 };

@@ -3,7 +3,7 @@ import { hashPassword, verifyPassword } from '../utils/hash.js';
 import { jsonResponse } from '../utils/response.js';
 
 export async function handleAuth(request, env, path) {
-  if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+  if (request.method !== 'POST') return jsonResponse({ error: 'Phương thức không hỗ trợ' }, 405);
 
   async function getBody() {
     try { return await request.clone().json(); } catch { return {}; }
@@ -11,9 +11,9 @@ export async function handleAuth(request, env, path) {
 
   if (path === '/api/auth/register') {
     const { email, password, name, ref } = await getBody();
-    if (!email || !password) return jsonResponse({ error: 'Email and password required' }, 400);
+    if (!email || !password) return jsonResponse({ error: 'Vui lòng nhập email và mật khẩu' }, 400);
     const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
-    if (existing) return jsonResponse({ error: 'Email already registered' }, 409);
+    if (existing) return jsonResponse({ error: 'Email đã được đăng ký' }, 409);
     const hash = await hashPassword(password);
 
     // Check referral code
@@ -36,11 +36,11 @@ export async function handleAuth(request, env, path) {
 
   if (path === '/api/auth/login') {
     const { email, password, source, ref } = await getBody();
-    if (!email || !password) return jsonResponse({ error: 'Email and password required' }, 400);
+    if (!email || !password) return jsonResponse({ error: 'Vui lòng nhập email và mật khẩu' }, 400);
     const user = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
-    if (!user) return jsonResponse({ error: 'Invalid credentials' }, 401);
+    if (!user) return jsonResponse({ error: 'Sai thông tin đăng nhập' }, 401);
     const valid = await verifyPassword(password, user.password_hash);
-    if (!valid) return jsonResponse({ error: 'Invalid credentials' }, 401);
+    if (!valid) return jsonResponse({ error: 'Sai thông tin đăng nhập' }, 401);
     // If user has no referrer yet and ref code provided, set it
     if (ref && !user.referred_by) {
       const affiliate = await env.DB.prepare('SELECT id FROM users WHERE ref_code = ? AND is_affiliate = 1').bind(ref).first();
@@ -66,11 +66,11 @@ export async function handleAuth(request, env, path) {
   if (path === '/api/auth/me') {
     const { verifyJWT } = await import('../utils/jwt.js');
     const payload = await verifyJWT(request, env);
-    if (!payload) return jsonResponse({ error: 'Unauthorized' }, 401);
+    if (!payload) return jsonResponse({ error: 'Chưa đăng nhập' }, 401);
     const user = await env.DB.prepare(
       'SELECT id,email,name,plan,credits,role,daily_limit,video_limit,plan_expires,created_at,is_affiliate,ref_code FROM users WHERE id = ?'
     ).bind(payload.sub).first();
-    if (!user) return jsonResponse({ error: 'User not found' }, 404);
+    if (!user) return jsonResponse({ error: 'Không tìm thấy người dùng' }, 404);
     const accCount = await env.DB.prepare('SELECT COUNT(*) as cnt FROM grok_accounts WHERE user_id = ?').bind(payload.sub).first();
     user.account_count = accCount?.cnt || 0;
     return jsonResponse({ user });
@@ -79,7 +79,7 @@ export async function handleAuth(request, env, path) {
   if (path === '/api/auth/profile') {
     const { verifyJWT } = await import('../utils/jwt.js');
     const payload = await verifyJWT(request, env);
-    if (!payload) return jsonResponse({ error: 'Unauthorized' }, 401);
+    if (!payload) return jsonResponse({ error: 'Chưa đăng nhập' }, 401);
     const body = await getBody();
     const { name, password, current_password } = body;
     const sets = [];
@@ -102,5 +102,5 @@ export async function handleAuth(request, env, path) {
     return jsonResponse({ user: updated, message: 'Đã cập nhật' });
   }
 
-  return jsonResponse({ error: 'Not found' }, 404);
+  return jsonResponse({ error: 'Không tìm thấy' }, 404);
 }

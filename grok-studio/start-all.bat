@@ -5,9 +5,9 @@ echo   GROK STUDIO - Starting All Services
 echo ============================================
 echo.
 
-:: 1. Start Grok2API
-echo [1/3] Starting Grok2API...
-start "Grok2API" cmd /k "cd /d C:\grok2api && .venv\Scripts\activate && python -m uvicorn main:app --host 0.0.0.0 --port 8000"
+:: 1. Start Grok2API (with auto-restart watchdog)
+echo [1/3] Starting Grok2API (auto-restart enabled)...
+start "Grok2API" cmd /k "C:\grok-studio\grok2api-watchdog.bat"
 echo   Waiting for startup...
 timeout /t 6 /nobreak >nul
 

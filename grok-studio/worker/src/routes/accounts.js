@@ -24,6 +24,36 @@ function makePreview(raw) {
   return val ? val.substring(0, 20) + '...' : '(invalid)';
 }
 
+// Normalize token: ensure valid JSON, trim whitespace
+function normalizeToken(raw) {
+  if (typeof raw !== 'string') {
+    try { return JSON.stringify(raw); } catch { return String(raw); }
+  }
+  const trimmed = raw.trim();
+  // If it's valid JSON, re-serialize to compact form
+  try {
+    const parsed = JSON.parse(trimmed);
+    return JSON.stringify(parsed); // compact JSON, preserves quotes
+  } catch {}
+  // If it looks like corrupt JSON (missing quotes), try to fix it
+  // Pattern: [{domain:...,name:...,value:...},...] — add quotes to keys and string values
+  if (trimmed.startsWith('[{') && trimmed.includes('name:') && trimmed.includes('value:')) {
+    try {
+      // Add quotes around keys and string values
+      const fixed = trimmed.replace(/([{,])\s*(\w+)\s*:/g, '$1"$2":')
+        .replace(/:([^,}\]\d\[{][^,}\]]*)/g, (match, val) => {
+          const v = val.trim();
+          if (v === 'true' || v === 'false' || v === 'null' || v === '') return match;
+          if (v.startsWith('"')) return match;
+          return ':"' + v + '"';
+        });
+      const parsed = JSON.parse(fixed);
+      return JSON.stringify(parsed);
+    } catch {}
+  }
+  return trimmed;
+}
+
 // Analyze cookie freshness
 function analyzeCookies(raw) {
   const info = { hasSso: false, hasCfBm: false, hasCfClearance: false, hasTwpid: false, cfBmExpiry: null, ssoExpiry: null, allExpired: false };
@@ -107,7 +137,7 @@ export async function handleAccounts(request, env, user, path) {
         const label = typeof item === 'object' && item.label ? item.label : '';
         const ssoVal = extractSsoValue(raw);
         if (!ssoVal || ssoVal.length < 10) { errors.push('Token không hợp lệ: ' + String(raw).substring(0, 20) + '...'); continue; }
-        const tokenStr = typeof raw === 'string' ? raw.trim() : JSON.stringify(raw);
+        const tokenStr = normalizeToken(raw);
         try {
           await env.DB.prepare('INSERT INTO grok_accounts (user_id, sso_token, label) VALUES (?, ?, ?)').bind(userId, tokenStr, label).run();
           added++;
@@ -118,7 +148,7 @@ export async function handleAccounts(request, env, user, path) {
 
     // Single mode
     const { sso_token, label } = body;
-    if (!sso_token) return jsonResponse({ error: 'Cookie/token required' }, 400);
+    if (!sso_token) return jsonResponse({ error: 'Vui lòng nhập cookie/token' }, 400);
 
     const ssoVal = extractSsoValue(sso_token);
     if (!ssoVal || ssoVal.length < 10) {
@@ -129,12 +159,12 @@ export async function handleAccounts(request, env, user, path) {
       return jsonResponse({ error: `Plan limit: max ${maxAccounts} accounts` }, 403);
     }
 
-    const tokenStr = typeof sso_token === 'string' ? sso_token.trim() : JSON.stringify(sso_token);
+    const tokenStr = normalizeToken(sso_token);
     const result = await env.DB.prepare(
       'INSERT INTO grok_accounts (user_id, sso_token, label) VALUES (?, ?, ?)'
     ).bind(userId, tokenStr, label || '').run();
 
-    return jsonResponse({ id: result.meta.last_row_id, message: 'Account added' });
+    return jsonResponse({ id: result.meta.last_row_id, message: 'Đã thêm tài khoản' });
   }
 
   // PUT /api/accounts/:id - update cookies for existing account
@@ -145,14 +175,14 @@ export async function handleAccounts(request, env, user, path) {
 
     // Verify ownership
     const existing = await env.DB.prepare('SELECT id FROM grok_accounts WHERE id = ? AND user_id = ?').bind(id, userId).first();
-    if (!existing) return jsonResponse({ error: 'Account not found' }, 404);
+    if (!existing) return jsonResponse({ error: 'Không tìm thấy tài khoản' }, 404);
 
     if (sso_token) {
       const ssoVal = extractSsoValue(sso_token);
       if (!ssoVal || ssoVal.length < 10) {
-        return jsonResponse({ error: 'Invalid cookie format' }, 400);
+        return jsonResponse({ error: 'Định dạng cookie không hợp lệ' }, 400);
       }
-      const tokenStr = typeof sso_token === 'string' ? sso_token.trim() : JSON.stringify(sso_token);
+      const tokenStr = normalizeToken(sso_token);
       await env.DB.prepare("UPDATE grok_accounts SET sso_token = ?, status = 'active' WHERE id = ?")
         .bind(tokenStr, id).run();
     }
@@ -161,14 +191,14 @@ export async function handleAccounts(request, env, user, path) {
         .bind(label, id).run();
     }
 
-    return jsonResponse({ message: 'Account updated' });
+    return jsonResponse({ message: 'Đã cập nhật tài khoản' });
   }
 
   // DELETE /api/accounts/bulk - bulk delete accounts
   if (request.method === 'DELETE' && path === '/api/accounts/bulk') {
     const body = await request.json();
     const ids = body.ids;
-    if (!Array.isArray(ids) || !ids.length) return jsonResponse({ error: 'ids array required' }, 400);
+    if (!Array.isArray(ids) || !ids.length) return jsonResponse({ error: 'Thiếu danh sách ids' }, 400);
     let deleted = 0;
     for (const id of ids) {
       const r = await env.DB.prepare('DELETE FROM grok_accounts WHERE id = ? AND user_id = ?').bind(id, userId).run();
@@ -182,8 +212,8 @@ export async function handleAccounts(request, env, user, path) {
   if (request.method === 'DELETE' && deleteMatch) {
     const id = parseInt(deleteMatch[1]);
     await env.DB.prepare('DELETE FROM grok_accounts WHERE id = ? AND user_id = ?').bind(id, userId).run();
-    return jsonResponse({ message: 'Deleted' });
+    return jsonResponse({ message: 'Đã xóa' });
   }
 
-  return jsonResponse({ error: 'Not found' }, 404);
+  return jsonResponse({ error: 'Không tìm thấy' }, 404);
 }

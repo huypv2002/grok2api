@@ -46,28 +46,45 @@ async function upgradePlan(env, userId, planId, orderId) {
 // ===== PUBLIC: Web2M Webhook =====
 export async function handleWebhook(request, env) {
   if (request.method !== 'POST') {
-    return jsonResponse({ status: false, msg: 'Method not allowed' }, 405);
+    return jsonResponse({ status: false, msg: 'Phương thức không hỗ trợ' }, 405);
   }
 
   // Verify Bearer token from Web2M
   const authHeader = request.headers.get('Authorization') || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
   if (!token || token !== env.WEB2M_TOKEN) {
-    return jsonResponse({ status: false, msg: 'Unauthorized' }, 401);
+    console.log(`[Webhook] Auth failed. Got token: "${token?.slice(0,10)}..." Expected: "${env.WEB2M_TOKEN?.slice(0,10)}..."`);
+    return jsonResponse({ status: false, msg: 'Không có quyền truy cập' }, 401);
   }
 
   let body;
   try { body = await request.json(); } catch {
-    return jsonResponse({ status: false, msg: 'Invalid JSON' }, 400);
+    return jsonResponse({ status: false, msg: 'JSON không hợp lệ' }, 400);
   }
 
-  if (!body.status || !Array.isArray(body.data)) {
+  // Log full webhook payload for debugging
+  console.log(`[Webhook] Full payload: ${JSON.stringify(body).slice(0, 2000)}`);
+
+  // Save webhook log to DB for debugging
+  try {
+    await env.DB.prepare(
+      "INSERT INTO webhook_logs (payload, created_at) VALUES (?, datetime('now'))"
+    ).bind(JSON.stringify(body).slice(0, 4000)).run();
+  } catch (e) { /* table might not exist yet, ignore */ }
+
+  if (!body.status && !body.data) {
     return jsonResponse({ status: true, msg: 'No data' });
   }
 
-  console.log(`[Webhook] Received ${body.data.length} transactions`);
+  // Web2M can send data as array or single object
+  const txList = Array.isArray(body.data) ? body.data : (body.data ? [body.data] : []);
+  if (!txList.length) {
+    return jsonResponse({ status: true, msg: 'Empty data' });
+  }
 
-  for (const tx of body.data) {
+  console.log(`[Webhook] Processing ${txList.length} transactions`);
+
+  for (const tx of txList) {
     if (tx.type !== 'IN') continue;
 
     const desc = (tx.description || '').toUpperCase();
@@ -127,7 +144,7 @@ export async function handlePayment(request, env, user, path) {
   // POST /api/payment/check — just check DB status (webhook updates it)
   if (path === '/api/payment/check' && request.method === 'POST') {
     const { memo_code } = await request.json();
-    if (!memo_code) return jsonResponse({ error: 'Missing memo_code' }, 400);
+    if (!memo_code) return jsonResponse({ error: 'Thiếu mã giao dịch' }, 400);
 
     const order = await env.DB.prepare(
       'SELECT * FROM payment_orders WHERE memo_code = ? AND user_id = ?'
@@ -150,5 +167,5 @@ export async function handlePayment(request, env, user, path) {
     return jsonResponse({ orders: rows.results });
   }
 
-  return jsonResponse({ error: 'Not found' }, 404);
+  return jsonResponse({ error: 'Không tìm thấy' }, 404);
 }

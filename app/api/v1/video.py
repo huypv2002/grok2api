@@ -315,9 +315,10 @@ def _build_create_response(
     seconds: int,
     quality: str,
     url: str,
+    post_id: str = "",
 ) -> Dict[str, Any]:
     ts = int(time.time())
-    return {
+    resp = {
         "id": f"video_{uuid.uuid4().hex[:24]}",
         "object": "video",
         "created_at": ts,
@@ -330,6 +331,9 @@ def _build_create_response(
         "quality": quality,
         "url": url,
     }
+    if post_id:
+        resp["post_id"] = post_id
+    return resp
 
 
 async def _create_video_from_payload(
@@ -390,6 +394,7 @@ async def _create_video_from_payload(
             seconds=seconds,
             quality=quality,
             url=video_url,
+            post_id=result.get("post_id", ""),
         )
     )
 

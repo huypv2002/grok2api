@@ -6,13 +6,19 @@ const GROK2API_KEY = 'grok2api';
 async function saveToR2(env, outputUrl, type, historyId) {
   try {
     const isVideo = type.includes('video') || type === 'extend_video';
-    const ext = isVideo ? 'mp4' : 'jpg';
-    const key = `media/${historyId}.${ext}`;
 
     const resp = await fetch(outputUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     if (!resp.ok) return null;
 
-    const contentType = resp.headers.get('content-type') || (isVideo ? 'video/mp4' : 'image/jpeg');
+    const contentType = resp.headers.get('content-type') || (isVideo ? 'video/mp4' : 'image/png');
+    // Detect extension from actual content-type
+    let ext = isVideo ? 'mp4' : 'png';
+    if (!isVideo) {
+      if (contentType.includes('jpeg') || contentType.includes('jpg')) ext = 'jpg';
+      else if (contentType.includes('webp')) ext = 'webp';
+    }
+    const key = `media/${historyId}.${ext}`;
+
     await env.MEDIA.put(key, resp.body, {
       httpMetadata: { contentType },
     });
@@ -51,7 +57,7 @@ async function checkCredits(env, userId) {
 }
 async function checkDailyLimit(env, userId, type) {
   const u = await env.DB.prepare('SELECT plan, role, daily_limit, video_limit, plan_expires FROM users WHERE id = ?').bind(userId).first();
-  if (!u) return { ok: false, msg: 'User not found' };
+  if (!u) return { ok: false, msg: 'Không tìm thấy người dùng' };
   if (u.role === 'admin' || u.role === 'superadmin') return { ok: true };
 
   // Check plan expiry
@@ -92,7 +98,8 @@ async function checkDailyLimit(env, userId, type) {
   return { ok: true };
 }
 async function deductCredit(env, userId) {
-  await env.DB.prepare("UPDATE users SET credits = MAX(0, credits - 1), updated_at = datetime('now') WHERE id = ? AND plan != 'unlimited' AND role NOT IN ('admin','superadmin')").bind(userId).run();
+  // credits = -1 means unlimited, don't deduct
+  await env.DB.prepare("UPDATE users SET credits = MAX(0, credits - 1), updated_at = datetime('now') WHERE id = ? AND credits > 0 AND plan != 'unlimited' AND role NOT IN ('admin','superadmin')").bind(userId).run();
 }
 async function checkFeature(env, userId, feature) {
   const u = await env.DB.prepare('SELECT plan, role FROM users WHERE id = ?').bind(userId).first();
@@ -105,6 +112,8 @@ async function checkFeature(env, userId, feature) {
 // ─── Cookie parsing ───
 function parseCookies(rawInput) {
   const r = { sso: '', ssoRw: '', cookieStr: '', cfClearance: '', cfBm: '' };
+
+  // Try standard JSON parse first
   try {
     const arr = JSON.parse(rawInput);
     if (Array.isArray(arr)) {
@@ -118,6 +127,36 @@ function parseCookies(rawInput) {
       return r;
     }
   } catch {}
+
+  // Fallback: corrupt JSON (missing quotes) — extract values via regex
+  // Handles: [{domain:...,name:sso,value:eyJ...},{...}]
+  if (rawInput.includes('name:') && rawInput.includes('value:')) {
+    const cookieBlocks = rawInput.split(/\},?\s*\{/).map(s => s.replace(/[\[\]{}]/g, ''));
+    for (const block of cookieBlocks) {
+      const nameMatch = block.match(/(?:^|,)name:([^,}]+)/);
+      const valueMatch = block.match(/(?:^|,)value:([^,}]+)/);
+      if (nameMatch && valueMatch) {
+        const name = nameMatch[1].trim();
+        const value = valueMatch[1].trim();
+        if (name === 'sso') r.sso = value;
+        if (name === 'sso-rw') r.ssoRw = value;
+        if (name === 'cf_clearance') r.cfClearance = value;
+        if (name === '__cf_bm') r.cfBm = value;
+      }
+    }
+    if (r.sso) {
+      if (!r.ssoRw) r.ssoRw = r.sso;
+      // Build cookieStr from extracted values
+      const parts = [];
+      if (r.sso) parts.push(`sso=${r.sso}`);
+      if (r.ssoRw) parts.push(`sso-rw=${r.ssoRw}`);
+      if (r.cfClearance) parts.push(`cf_clearance=${r.cfClearance}`);
+      if (r.cfBm) parts.push(`__cf_bm=${r.cfBm}`);
+      r.cookieStr = parts.join('; ');
+      return r;
+    }
+  }
+
   const clean = rawInput.trim();
   r.sso = clean.startsWith('sso=') ? clean.slice(4) : clean;
   r.ssoRw = r.sso;
@@ -127,15 +166,27 @@ function parseCookies(rawInput) {
 
 // ─── Grok2API injection: push user's SSO + CF cookies into Grok2API before each request ───
 async function injectIntoGrok2API(apiBase, cookies) {
-  // 1) Inject SSO token into BOTH ssoBasic and ssoSuper pools
-  //    (Grok2API scheduler may move tokens between pools, so inject into both)
+  // 1) Clear existing tokens then inject fresh SSO-only token
+  //    Grok2API expects plain SSO JWT value, NOT full cookie JSON array
+  const ssoToken = cookies.sso;
+  if (!ssoToken) throw new Error('Không tìm thấy SSO token để inject');
+
   try {
+    // First DELETE existing tokens to avoid stale/malformed tokens in pool
+    try {
+      await fetch(`${apiBase}/v1/admin/tokens`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${GROK2API_KEY}` },
+      });
+    } catch {}
+
+    // Then inject clean SSO JWT into both pools
     const r = await fetch(`${apiBase}/v1/admin/tokens`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${GROK2API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ssoBasic: [{ token: cookies.sso }],
-        ssoSuper: [{ token: cookies.sso }],
+        ssoBasic: [{ token: ssoToken }],
+        ssoSuper: [{ token: ssoToken }],
       }),
     });
     if (!r.ok && r.status >= 500) {
@@ -143,7 +194,7 @@ async function injectIntoGrok2API(apiBase, cookies) {
     }
   } catch (e) {
     // Network error = tunnel is down, propagate it
-    throw new Error(`Grok2API unreachable (tunnel down?): ${e.message}`);
+    throw new Error(`Không kết nối được Grok2API (tunnel đứt?): ${e.message}`);
   }
 
   // 2) Inject cf_clearance + __cf_bm into proxy config
@@ -183,14 +234,18 @@ async function generateVideoViaAPI(apiBase, cookies, prompt, opts = {}) {
   await injectIntoGrok2API(apiBase, cookies);
 
   const { aspect_ratio = '16:9', video_length = 6, resolution = '480p' } = opts;
-  const sizeMap = { '16:9': '1792x1024', '9:16': '1024x1792', '1:1': '1024x1024', '3:2': '1280x720' };
+  const sizeMap = { '16:9': '1280x720', '9:16': '720x1280', '1:1': '1024x1024', '3:2': '1792x1024', '2:3': '1024x1792' };
 
   const resp = await fetch(`${apiBase}/v1/videos`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${GROK2API_KEY}`,
+      'X-Sso-Token': cookies.sso,
+    },
     body: JSON.stringify({
       prompt,
-      size: sizeMap[aspect_ratio] || '1792x1024',
+      size: sizeMap[aspect_ratio] || '1280x720',
       seconds: video_length || 6,
       quality: resolution === '720p' ? 'high' : 'standard',
     }),
@@ -198,27 +253,25 @@ async function generateVideoViaAPI(apiBase, cookies, prompt, opts = {}) {
 
   let result;
   try { result = await resp.json(); } catch {
-    // Grok2API sometimes returns plain text like "error code: 502"
     try { const txt = await resp.text(); result = { _rawText: txt }; } catch { result = {}; }
   }
-  const respText = JSON.stringify(result).substring(0, 300);
+  const respText = JSON.stringify(result).substring(0, 500);
 
   if (!resp.ok || result?.error) {
-    const msg = result?.error?.message || result?.detail || result?._rawText || `Video gen failed (HTTP ${resp.status}): ${respText}`;
-    // Detect rate limit / quota from Grok (429 via Grok2API often comes as 502)
-    // Grok2API returns 502 when all tokens are cooling/rate-limited — treat 502 as rate limit if no other info
-    const isRateLimit = resp.status === 429 || msg.includes('429') || msg.includes('rate limit') || msg.includes('cooling') || msg.includes('quota') || msg.includes('Too many') || msg.includes('Chat failed');
-    const is502NoInfo = (resp.status === 502 || resp.status === 503) && (!result?.error && !result?.detail && (!result?._rawText || result._rawText.includes('502') || result._rawText.includes('503') || result._rawText.length < 50));
-    if (isRateLimit || is502NoInfo) {
-      throw new Error(`RATE_LIMITED: Token Grok đã đạt giới hạn tạo video/ảnh (Grok trả ${resp.status}). Giới hạn tự reset sau 1h30-2h.`);
+    const msg = result?.error?.message || (typeof result?.detail === 'string' ? result.detail : '') || result?._rawText || `Tạo video thất bại (HTTP ${resp.status}): ${respText}`;
+    // Detect REAL rate limit — check body first (Grok2API wraps 429 inside 502)
+    const fullText = msg + ' ' + respText;
+    const isRateLimit = resp.status === 429 || fullText.includes('rate limit') || fullText.includes('cooling') || fullText.includes('quota') || fullText.includes('Too many') || fullText.includes('Chat failed, 429') || fullText.includes('failed, 429') || fullText.includes('rate_limited');
+    if (isRateLimit) {
+      throw new Error(`RATE_LIMITED: Token Grok đã bị giới hạn tạo video/ảnh. Vui lòng đợi 1h30-2h để reset hoặc thử token khác.`);
     }
-    // Detect CF block from Grok2API
+    // Detect CF block
     if (resp.status === 403 || msg.includes('403') || msg.includes('Cloudflare')) {
-      throw new Error(`CF_BLOCKED: ${msg}. Update cookies with fresh cf_clearance from grok.com.`);
+      throw new Error(`CF_BLOCKED: Bị chặn bởi Cloudflare. Cần cập nhật cookie cf_clearance mới từ grok.com.`);
     }
-    // 502/503 — could be transient, throw as retryable error (not TUNNEL_ERROR)
+    // 502/503 — transient server error
     if (resp.status === 502 || resp.status === 503) {
-      throw new Error(`SERVER_ERROR: Grok2API trả lỗi ${resp.status}. ${msg}`);
+      throw new Error(`SERVER_ERROR: Máy chủ Grok tạm thời lỗi (${resp.status}). Vui lòng thử lại sau vài phút.`);
     }
     throw new Error(msg);
   }
@@ -235,7 +288,104 @@ async function generateVideoViaAPI(apiBase, cookies, prompt, opts = {}) {
   const m = content.match(/https?:\/\/[^\s"'<>]+\.(mp4|webm)/i);
   if (m) return m[0];
 
-  throw new Error('Video generation returned no output URL. The model may have refused the prompt.');
+  throw new Error('Tạo video không trả về URL. Có thể prompt bị từ chối bởi Grok.');
+}
+
+// ─── Generate video and return full result (url + reference_id) for chaining ───
+async function generateVideoFull(apiBase, cookies, prompt, opts = {}) {
+  await injectIntoGrok2API(apiBase, cookies);
+
+  const { aspect_ratio = '16:9', video_length = 6, resolution = '480p' } = opts;
+  const sizeMap = { '16:9': '1280x720', '9:16': '720x1280', '1:1': '1024x1024', '3:2': '1792x1024', '2:3': '1024x1792' };
+
+  const resp = await fetch(`${apiBase}/v1/videos`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${GROK2API_KEY}`,
+      'X-Sso-Token': cookies.sso,
+    },
+    body: JSON.stringify({
+      prompt,
+      size: sizeMap[aspect_ratio] || '1280x720',
+      seconds: video_length || 6,
+      quality: resolution === '720p' ? 'high' : 'standard',
+    }),
+  });
+
+  let result;
+  try { result = await resp.json(); } catch {
+    try { const txt = await resp.text(); result = { _rawText: txt }; } catch { result = {}; }
+  }
+  const respText = JSON.stringify(result).substring(0, 500);
+
+  if (!resp.ok || result?.error) {
+    const msg = result?.error?.message || (typeof result?.detail === 'string' ? result.detail : '') || result?._rawText || `Tạo video thất bại (HTTP ${resp.status}): ${respText}`;
+    const fullText = msg + ' ' + respText;
+    const isRateLimit = resp.status === 429 || fullText.includes('rate limit') || fullText.includes('cooling') || fullText.includes('quota') || fullText.includes('Too many') || fullText.includes('Chat failed, 429') || fullText.includes('failed, 429') || fullText.includes('rate_limited');
+    if (isRateLimit) throw new Error(`RATE_LIMITED: Token Grok đã bị giới hạn tạo video/ảnh. Vui lòng đợi 1h30-2h để reset hoặc thử token khác.`);
+    if (resp.status === 403 || fullText.includes('Cloudflare')) throw new Error(`CF_BLOCKED: Bị chặn bởi Cloudflare.`);
+    if (resp.status === 502 || resp.status === 503) throw new Error(`SERVER_ERROR: Máy chủ Grok tạm thời lỗi (${resp.status}).`);
+    throw new Error(msg);
+  }
+
+  // Extract URL
+  let url = result?.url || result?.data?.[0]?.url || '';
+  if (url && url.startsWith('/')) url = apiBase + url;
+  if (!url) {
+    const content = result?.choices?.[0]?.message?.content || '';
+    const m = content.match(/https?:\/\/[^\s"'<>]+\.(mp4|webm)/i);
+    if (m) url = m[0];
+  }
+  if (!url) throw new Error('Tạo video không trả về URL.');
+
+  // Extract reference_id for extend chaining
+  // Grok2API may return: post_id (real grok.com ID), id, reference_id
+  const refId = result?.post_id || result?.reference_id || result?.id || result?.data?.[0]?.id || '';
+
+  return { url, reference_id: refId, raw: result };
+}
+
+// ─── Extend video and return full result (url + reference_id) for chaining ───
+async function extendVideoFull(apiBase, cookies, prompt, referenceId, startTime, opts = {}) {
+  await injectIntoGrok2API(apiBase, cookies);
+
+  const { aspect_ratio = '16:9', video_length = 6, resolution = '480p' } = opts;
+
+  const resp = await fetch(`${apiBase}/v1/video/extend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt,
+      reference_id: referenceId,
+      start_time: parseFloat(startTime) || 0,
+      ratio: aspect_ratio,
+      length: video_length || 6,
+      resolution: resolution || '480p',
+    }),
+  });
+
+  let result;
+  try { result = await resp.json(); } catch {
+    try { const txt = await resp.text(); result = { _rawText: txt }; } catch { result = {}; }
+  }
+  const respText = JSON.stringify(result).substring(0, 500);
+  if (!resp.ok || result?.error) {
+    const msg = result?.error?.message || (typeof result?.detail === 'string' ? result.detail : '') || result?._rawText || `Kéo dài video thất bại (HTTP ${resp.status}): ${respText}`;
+    const fullText = msg + ' ' + respText;
+    const isRateLimit = resp.status === 429 || fullText.includes('rate limit') || fullText.includes('cooling') || fullText.includes('quota') || fullText.includes('Too many') || fullText.includes('Chat failed, 429') || fullText.includes('failed, 429') || fullText.includes('rate_limited');
+    if (isRateLimit) throw new Error(`RATE_LIMITED: Token Grok đã bị giới hạn.`);
+    if (resp.status === 403 || fullText.includes('Cloudflare')) throw new Error(`CF_BLOCKED: Bị chặn bởi Cloudflare.`);
+    if (resp.status === 502 || resp.status === 503) throw new Error(`SERVER_ERROR: Máy chủ Grok tạm thời lỗi (${resp.status}).`);
+    throw new Error(msg);
+  }
+
+  let url = result?.url || result?.data?.[0]?.url || '';
+  if (url && url.startsWith('/')) url = apiBase + url;
+  if (!url) throw new Error('Kéo dài video không trả về URL.');
+
+  const refId = result?.post_id || result?.reference_id || result?.id || result?.data?.[0]?.id || '';
+  return { url, reference_id: refId, raw: result };
 }
 
 // ─── Image→Video via Grok2API (upload image first, then /v1/videos) ───
@@ -243,7 +393,7 @@ async function generateImageVideoViaAPI(apiBase, cookies, prompt, imageUrl, opts
   await injectIntoGrok2API(apiBase, cookies);
 
   const { aspect_ratio = '16:9', video_length = 6, resolution = '480p' } = opts;
-  const sizeMap = { '16:9': '1792x1024', '9:16': '1024x1792', '1:1': '1024x1024', '3:2': '1280x720', '2:3': '720x1280' };
+  const sizeMap = { '16:9': '1280x720', '9:16': '720x1280', '1:1': '1024x1024', '3:2': '1792x1024', '2:3': '1024x1792' };
 
   // image_reference accepts data URI directly, no need to upload separately
   let uploadedUrl = imageUrl;
@@ -255,7 +405,7 @@ async function generateImageVideoViaAPI(apiBase, cookies, prompt, imageUrl, opts
     body: JSON.stringify({
       prompt,
       image_reference: { image_url: uploadedUrl },
-      size: sizeMap[aspect_ratio] || '1792x1024',
+      size: sizeMap[aspect_ratio] || '1280x720',
       seconds: video_length || 6,
       quality: resolution === '720p' ? 'high' : 'standard',
     }),
@@ -265,19 +415,20 @@ async function generateImageVideoViaAPI(apiBase, cookies, prompt, imageUrl, opts
   try { result = await resp.json(); } catch {
     try { const txt = await resp.text(); result = { _rawText: txt }; } catch { result = {}; }
   }
+  const respText = JSON.stringify(result).substring(0, 500);
 
   if (!resp.ok || result?.error) {
-    const msg = result?.error?.message || result?.detail || result?._rawText || `Image→Video failed (HTTP ${resp.status})`;
-    const isRateLimit = resp.status === 429 || msg.includes('429') || msg.includes('rate limit') || msg.includes('cooling') || msg.includes('quota') || msg.includes('Too many') || msg.includes('Chat failed');
-    const is502NoInfo = (resp.status === 502 || resp.status === 503) && (!result?.error && !result?.detail && (!result?._rawText || result._rawText.includes('502') || result._rawText.includes('503') || result._rawText.length < 50));
-    if (isRateLimit || is502NoInfo) {
-      throw new Error(`RATE_LIMITED: Token Grok đã đạt giới hạn (Grok trả ${resp.status}). Giới hạn tự reset sau 1h30-2h.`);
+    const msg = result?.error?.message || (typeof result?.detail === 'string' ? result.detail : '') || result?._rawText || `Ảnh→Video thất bại (HTTP ${resp.status}): ${respText}`;
+    const fullText = msg + ' ' + respText;
+    const isRateLimit = resp.status === 429 || fullText.includes('rate limit') || fullText.includes('cooling') || fullText.includes('quota') || fullText.includes('Too many') || fullText.includes('Chat failed, 429') || fullText.includes('failed, 429') || fullText.includes('rate_limited');
+    if (isRateLimit) {
+      throw new Error(`RATE_LIMITED: Token Grok đã bị giới hạn tạo video/ảnh. Vui lòng đợi 1h30-2h để reset hoặc thử token khác.`);
     }
-    if (resp.status === 403 || msg.includes('403') || msg.includes('Cloudflare')) {
-      throw new Error(`CF_BLOCKED: ${msg}`);
+    if (resp.status === 403 || fullText.includes('Cloudflare')) {
+      throw new Error(`CF_BLOCKED: Bị chặn bởi Cloudflare. Cần cập nhật cookie cf_clearance mới từ grok.com.`);
     }
     if (resp.status === 502 || resp.status === 503) {
-      throw new Error(`SERVER_ERROR: Grok2API trả lỗi ${resp.status}. ${msg}`);
+      throw new Error(`SERVER_ERROR: Máy chủ Grok tạm thời lỗi (${resp.status}). Vui lòng thử lại sau vài phút.`);
     }
     throw new Error(msg);
   }
@@ -292,7 +443,7 @@ async function generateImageVideoViaAPI(apiBase, cookies, prompt, imageUrl, opts
   const m = content.match(/https?:\/\/[^\s"'<>]+\.(mp4|webm)/i);
   if (m) return m[0];
 
-  throw new Error('Image→Video returned no video URL. Response: ' + JSON.stringify(result).substring(0, 200));
+  throw new Error('Ảnh→Video không trả về URL. Response: ' + JSON.stringify(result).substring(0, 200));
 }
 
 // ─── Extend video via Grok2API /v1/video/extend ───
@@ -318,18 +469,19 @@ async function extendVideoViaAPI(apiBase, cookies, prompt, referenceId, startTim
   try { result = await resp.json(); } catch {
     try { const txt = await resp.text(); result = { _rawText: txt }; } catch { result = {}; }
   }
+  const respText = JSON.stringify(result).substring(0, 500);
   if (!resp.ok || result?.error) {
-    const msg = result?.error?.message || result?.detail || result?._rawText || `Extend failed (HTTP ${resp.status})`;
-    const isRateLimit = resp.status === 429 || msg.includes('429') || msg.includes('rate limit') || msg.includes('cooling') || msg.includes('quota') || msg.includes('Too many') || msg.includes('Chat failed');
-    const is502NoInfo = (resp.status === 502 || resp.status === 503) && (!result?.error && !result?.detail && (!result?._rawText || result._rawText.includes('502') || result._rawText.includes('503') || result._rawText.length < 50));
-    if (isRateLimit || is502NoInfo) {
-      throw new Error(`RATE_LIMITED: Token Grok đã đạt giới hạn (Grok trả ${resp.status}). Giới hạn tự reset sau 1h30-2h.`);
+    const msg = result?.error?.message || (typeof result?.detail === 'string' ? result.detail : '') || result?._rawText || `Kéo dài video thất bại (HTTP ${resp.status}): ${respText}`;
+    const fullText = msg + ' ' + respText;
+    const isRateLimit = resp.status === 429 || fullText.includes('rate limit') || fullText.includes('cooling') || fullText.includes('quota') || fullText.includes('Too many') || fullText.includes('Chat failed, 429') || fullText.includes('failed, 429') || fullText.includes('rate_limited');
+    if (isRateLimit) {
+      throw new Error(`RATE_LIMITED: Token Grok đã bị giới hạn. Vui lòng đợi 1h30-2h để reset hoặc thử token khác.`);
     }
-    if (resp.status === 403 || msg.includes('403') || msg.includes('Cloudflare')) {
-      throw new Error(`CF_BLOCKED: ${msg}`);
+    if (resp.status === 403 || fullText.includes('Cloudflare')) {
+      throw new Error(`CF_BLOCKED: Bị chặn bởi Cloudflare. Cần cập nhật cookie cf_clearance mới từ grok.com.`);
     }
     if (resp.status === 502 || resp.status === 503) {
-      throw new Error(`SERVER_ERROR: Grok2API trả lỗi ${resp.status}. ${msg}`);
+      throw new Error(`SERVER_ERROR: Máy chủ Grok tạm thời lỗi (${resp.status}). Vui lòng thử lại sau vài phút.`);
     }
     throw new Error(msg);
   }
@@ -338,7 +490,7 @@ async function extendVideoViaAPI(apiBase, cookies, prompt, referenceId, startTim
   const url = result?.data?.[0]?.url;
   if (url) return url.startsWith('/') ? apiBase + url : url;
 
-  throw new Error('Video extend returned no URL.');
+  throw new Error('Kéo dài video không trả về URL.');
 }
 
 // ─── Image generation via Grok2API /v1/images/generations (WebSocket, no CF) ───
@@ -355,14 +507,27 @@ async function generateImageViaAPI(apiBase, cookies, prompt, opts = {}) {
 
   let result;
   try { result = await resp.json(); } catch { result = {}; }
+  const respText = JSON.stringify(result).substring(0, 500);
   if (!resp.ok || result?.error) {
-    throw new Error(result?.error?.message || `Image gen failed (HTTP ${resp.status})`);
+    const msg = result?.error?.message || (typeof result?.detail === 'string' ? result.detail : '') || result?._rawText || `Tạo ảnh thất bại (HTTP ${resp.status}): ${respText}`;
+    const fullText = msg + ' ' + respText;
+    const isRateLimit = resp.status === 429 || fullText.includes('rate limit') || fullText.includes('cooling') || fullText.includes('quota') || fullText.includes('Too many') || fullText.includes('Chat failed, 429') || fullText.includes('failed, 429') || fullText.includes('rate_limited');
+    if (isRateLimit) {
+      throw new Error(`RATE_LIMITED: Token Grok đã bị giới hạn tạo ảnh. Vui lòng đợi 1h30-2h để reset hoặc thử token khác.`);
+    }
+    if (resp.status === 403 || fullText.includes('Cloudflare')) {
+      throw new Error(`CF_BLOCKED: Bị chặn bởi Cloudflare. Cần cập nhật cookie cf_clearance mới từ grok.com.`);
+    }
+    if (resp.status === 502 || resp.status === 503) {
+      throw new Error(`SERVER_ERROR: Máy chủ Grok tạm thời lỗi (${resp.status}). Vui lòng thử lại sau vài phút.`);
+    }
+    throw new Error(msg);
   }
 
   const url = result?.data?.[0]?.url;
   if (url) return url.startsWith('/') ? apiBase + url : url;
   if (result?.data?.[0]?.b64_json) return `data:image/png;base64,${result.data[0].b64_json}`;
-  throw new Error('Image generation returned no output');
+  throw new Error('Tạo ảnh không trả về kết quả');
 }
 
 // ─── Image edit via Grok2API /v1/images/edits ───
@@ -379,32 +544,45 @@ async function editImageViaAPI(apiBase, cookies, prompt, imageUrl, opts = {}) {
 
   let result;
   try { result = await resp.json(); } catch { result = {}; }
+  const respText = JSON.stringify(result).substring(0, 500);
   if (!resp.ok || result?.error) {
-    throw new Error(result?.error?.message || `Image edit failed (HTTP ${resp.status})`);
+    const msg = result?.error?.message || (typeof result?.detail === 'string' ? result.detail : '') || result?._rawText || `Chỉnh sửa ảnh thất bại (HTTP ${resp.status}): ${respText}`;
+    const fullText = msg + ' ' + respText;
+    const isRateLimit = resp.status === 429 || fullText.includes('rate limit') || fullText.includes('cooling') || fullText.includes('quota') || fullText.includes('Too many') || fullText.includes('Chat failed, 429') || fullText.includes('failed, 429') || fullText.includes('rate_limited');
+    if (isRateLimit) {
+      throw new Error(`RATE_LIMITED: Token Grok đã bị giới hạn. Vui lòng đợi 1h30-2h để reset hoặc thử token khác.`);
+    }
+    if (resp.status === 403 || fullText.includes('Cloudflare')) {
+      throw new Error(`CF_BLOCKED: Bị chặn bởi Cloudflare. Cần cập nhật cookie cf_clearance mới từ grok.com.`);
+    }
+    if (resp.status === 502 || resp.status === 503) {
+      throw new Error(`SERVER_ERROR: Máy chủ Grok tạm thời lỗi (${resp.status}). Vui lòng thử lại sau vài phút.`);
+    }
+    throw new Error(msg);
   }
 
   const url = result?.data?.[0]?.url;
   if (url) return url.startsWith('/') ? apiBase + url : url;
   if (result?.data?.[0]?.b64_json) return `data:image/png;base64,${result.data[0].b64_json}`;
-  throw new Error('Image edit returned no output');
+  throw new Error('Chỉnh sửa ảnh không trả về kết quả');
 }
 
 // ─── Main handler ───
 export async function handleGenerate(request, env, user) {
-  if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+  if (request.method !== 'POST') return jsonResponse({ error: 'Phương thức không hỗ trợ' }, 405);
   const userId = user.sub;
   const body = await request.json();
   const apiBase = env.GROK_API_BASE;
 
   if (!apiBase) {
-    return jsonResponse({ error: 'GROK_API_BASE not configured. Set it in wrangler.toml [vars].' }, 500);
+    return jsonResponse({ error: 'GROK_API_BASE chưa được cấu hình.' }, 500);
   }
 
   // ── Diagnostic endpoint ──
   if (body.type === 'diagnose') {
     const account = await getRandomToken(env, userId);
     if (!account) {
-      return jsonResponse({ hasAccount: false, apiReachable: false, hint: 'No Grok account. Add one in My Accounts.' });
+      return jsonResponse({ hasAccount: false, apiReachable: false, hint: 'Chưa có tài khoản Grok. Thêm token trong phần Cài Đặt Token.' });
     }
     const cookies = parseCookies(account.sso_token);
 
@@ -429,19 +607,19 @@ export async function handleGenerate(request, env, user) {
       apiReachable: apiOk,
       apiBase,
       hint: !apiOk
-        ? `Cannot reach Grok2API at ${apiBase}. Error: ${apiError}. Make sure Grok2API is running.`
+        ? `Không kết nối được Grok2API tại ${apiBase}. Lỗi: ${apiError}. Kiểm tra Grok2API đang chạy chưa.`
         : !cookies.cfClearance
-          ? 'Connected to Grok2API. Warning: no cf_clearance in cookies — video gen may fail. Re-export cookies after solving a CF challenge on grok.com.'
-          : 'All good. Grok2API connected, cookies have cf_clearance.',
+          ? 'Đã kết nối Grok2API. Cảnh báo: cookie thiếu cf_clearance — tạo video có thể lỗi. Hãy export lại cookie sau khi giải CF challenge trên grok.com.'
+          : 'Tất cả OK. Grok2API đã kết nối, cookie có cf_clearance.',
     });
   }
 
-  const { type, prompt, image_url, reference_id, start_time, aspect_ratio, video_length, resolution, size, n, account_id } = body;
-  if (!type || !prompt) return jsonResponse({ error: 'type and prompt required' }, 400);
+  const { type, prompt, image_url, reference_id, start_time, aspect_ratio, video_length, resolution, size, n, account_id, session_id, session_name } = body;
+  if (!type || !prompt) return jsonResponse({ error: 'Thiếu loại hoặc prompt' }, 400);
 
   const allowed = await checkFeature(env, userId, type);
-  if (!allowed) return jsonResponse({ error: 'Feature not available on your plan.' }, 403);
-  if (!(await checkCredits(env, userId))) return jsonResponse({ error: 'No credits remaining.' }, 403);
+  if (!allowed) return jsonResponse({ error: 'Tính năng này không khả dụng trên gói của bạn.' }, 403);
+  if (!(await checkCredits(env, userId))) return jsonResponse({ error: 'Đã hết lượt sử dụng.' }, 403);
 
   const dailyCheck = await checkDailyLimit(env, userId, type);
   if (!dailyCheck.ok) return jsonResponse({ error: dailyCheck.msg, daily_limit: true }, 429);
@@ -480,19 +658,19 @@ export async function handleGenerate(request, env, user) {
         token_cooling: true,
       }, 429);
     }
-    return jsonResponse({ error: 'No active Grok accounts. Add one in My Accounts.' }, 400);
+    return jsonResponse({ error: 'Chưa có tài khoản Grok. Thêm token trong phần Tài khoản.' }, 400);
   }
 
   const histResult = await env.DB.prepare(
-    "INSERT INTO history (user_id, type, prompt, input_url, status) VALUES (?, ?, ?, ?, 'processing')"
-  ).bind(userId, type, prompt, image_url || null).run();
+    "INSERT INTO history (user_id, type, prompt, input_url, status, session_id, session_name) VALUES (?, ?, ?, ?, 'processing', ?, ?)"
+  ).bind(userId, type, prompt, image_url || null, session_id || null, session_name || null).run();
   const historyId = histResult.meta.last_row_id;
 
   const cookies = parseCookies(account.sso_token);
   if (!cookies.sso) {
     await env.DB.prepare("UPDATE grok_accounts SET status = 'invalid' WHERE id = ?").bind(account.id).run();
     await env.DB.prepare("UPDATE history SET status = 'failed' WHERE id = ?").bind(historyId).run();
-    return jsonResponse({ error: 'Invalid cookie — no SSO token found. Re-add your cookies.' }, 400);
+    return jsonResponse({ error: 'Cookie không hợp lệ — không tìm thấy SSO token. Hãy thêm lại cookie.' }, 400);
   }
 
   try {
@@ -504,7 +682,7 @@ export async function handleGenerate(request, env, user) {
         break;
 
       case 'image2video':
-        if (!image_url) throw new Error('Upload an image first');
+        if (!image_url) throw new Error('Vui lòng tải ảnh lên trước');
         outputUrl = await generateImageVideoViaAPI(apiBase, cookies, prompt, image_url, { aspect_ratio, video_length: video_length || 6, resolution: resolution || '480p' });
         break;
 
@@ -513,22 +691,22 @@ export async function handleGenerate(request, env, user) {
         break;
 
       case 'image2image':
-        if (!image_url) throw new Error('Upload an image first');
+        if (!image_url) throw new Error('Vui lòng tải ảnh lên trước');
         outputUrl = await editImageViaAPI(apiBase, cookies, prompt, image_url, { size, n });
         break;
 
       case 'extend_video':
-        if (!reference_id) throw new Error('Reference ID required');
+        if (!reference_id) throw new Error('Thiếu Reference ID');
         outputUrl = await extendVideoViaAPI(apiBase, cookies, prompt, reference_id, start_time || 0, { aspect_ratio, video_length: video_length || 6, resolution: resolution || '480p' });
         break;
 
       default:
-        return jsonResponse({ error: 'Invalid type' }, 400);
+        return jsonResponse({ error: 'Loại không hợp lệ' }, 400);
     }
 
     if (!outputUrl) {
       await env.DB.prepare("UPDATE history SET status = 'failed', metadata = '{}' WHERE id = ?").bind(historyId).run();
-      return jsonResponse({ error: 'Generation returned no output.' }, 502);
+      return jsonResponse({ error: 'Tạo không trả về kết quả.' }, 502);
     }
 
     // Save to R2 for permanent storage (Grok deletes files after a few hours)
@@ -559,7 +737,7 @@ export async function handleGenerate(request, env, user) {
 
     if (msg.startsWith('CF_BLOCKED')) {
       return jsonResponse({
-        error: 'Cloudflare blocked the request (403). Cookies need cf_clearance. Steps:\n1. Open grok.com in Chrome\n2. Solve any CF challenge\n3. Export ALL cookies (including cf_clearance)\n4. Update your account with fresh cookies',
+        error: 'Bị chặn bởi Cloudflare (403). Cookie cần có cf_clearance.\n1. Mở grok.com trên Chrome\n2. Giải CF challenge\n3. Export tất cả cookie (bao gồm cf_clearance)\n4. Cập nhật lại cookie mới',
         cf_blocked: true,
       }, 502);
     }
@@ -627,7 +805,198 @@ export async function handleGenerate(request, env, user) {
       return jsonResponse({ error: 'Tài khoản Grok đã hết quota. Quota tự reset sau vài giờ, hoặc thêm tài khoản Grok mới.', quota_exhausted: true }, 429);
     }
 
-    return jsonResponse({ error: `Generation failed: ${msg}` }, 500);
+    return jsonResponse({ error: `Tạo thất bại: ${msg}` }, 500);
+  }
+}
+
+// ─── Video Project: chain gen + extend to create long video ───
+export async function handleVideoProject(request, env, user, ctx) {
+  if (request.method !== 'POST') return jsonResponse({ error: 'Phương thức không hỗ trợ' }, 405);
+  try {
+  const userId = user.sub;
+  const body = await request.json();
+  const apiBase = env.GROK_API_BASE;
+  if (!apiBase) return jsonResponse({ error: 'GROK_API_BASE chưa cấu hình' }, 500);
+
+  const { prompts, aspect_ratio = '16:9', video_length = 6, resolution = '480p', session_id, session_name, reference_id, start_time } = body;
+  if (!Array.isArray(prompts) || prompts.length < 1) return jsonResponse({ error: 'Cần ít nhất 1 prompt' }, 400);
+  if (!reference_id && prompts.length < 2) return jsonResponse({ error: 'Cần ít nhất 2 prompt (hoặc cung cấp reference_id để extend)' }, 400);
+
+  // Max clips: 30s total / video_length per clip
+  const len = parseInt(video_length) || 6;
+  const maxClips = Math.floor(30 / len);
+  const clips = prompts.slice(0, maxClips);
+
+  // Check credits
+  if (!(await checkCredits(env, userId))) return jsonResponse({ error: 'Đã hết lượt sử dụng.' }, 403);
+  const allowed = await checkFeature(env, userId, 'text2video');
+  if (!allowed) return jsonResponse({ error: 'Tính năng này không khả dụng trên gói của bạn.' }, 403);
+
+  // Get all active tokens for rotation
+  const allTokens = await env.DB.prepare(
+    "SELECT id, sso_token FROM grok_accounts WHERE user_id = ? AND status = 'active' ORDER BY RANDOM()"
+  ).bind(userId).all();
+  let tokens = allTokens?.results || [];
+
+  // Also try cooled tokens
+  if (tokens.length === 0) {
+    const cooled = await env.DB.prepare(
+      "SELECT id, sso_token FROM grok_accounts WHERE user_id = ? AND status = 'limited' AND limited_at <= datetime('now', '-2 hours') ORDER BY RANDOM()"
+    ).bind(userId).all();
+    tokens = cooled?.results || [];
+    for (const t of tokens) {
+      await env.DB.prepare("UPDATE grok_accounts SET status = 'active', limited_at = NULL WHERE id = ?").bind(t.id).run();
+    }
+  }
+  if (tokens.length === 0) return jsonResponse({ error: 'Chưa có token Grok hoạt động.' }, 400);
+
+  // Create history entry for the project
+  const histResult = await env.DB.prepare(
+    "INSERT INTO history (user_id, type, prompt, status, session_id, session_name) VALUES (?, 'text2video', ?, 'processing', ?, ?)"
+  ).bind(userId, clips.join('\n---\n'), session_id || null, session_name || null).run();
+  const historyId = histResult.meta.last_row_id;
+
+  // SSE stream for progress
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const enc = new TextEncoder();
+  const send = (data) => writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`));
+
+  // Process chain in background
+  const processChain = async () => {
+    let tokenIdx = 0;
+    const getNextToken = () => {
+      const t = tokens[tokenIdx % tokens.length];
+      tokenIdx++;
+      return t;
+    };
+
+    let lastRefId = reference_id || '';
+    let lastUrl = '';
+    let totalTime = (reference_id && start_time) ? (parseFloat(start_time) || 0) : 0;
+    const results = [];
+    let writerClosed = false;
+    const safeSend = async (data) => {
+      if (writerClosed) return;
+      try { await writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`)); } catch (e) { console.error('SSE write error:', e.message); }
+    };
+    const safeClose = async () => {
+      if (writerClosed) return;
+      writerClosed = true;
+      try { await writer.close(); } catch {}
+    };
+
+    try {
+      for (let i = 0; i < clips.length; i++) {
+        const clipPrompt = clips[i].trim();
+        if (!clipPrompt) continue;
+
+        const token = getNextToken();
+        const cookies = parseCookies(token.sso_token);
+        if (!cookies.sso) {
+          await safeSend({ step: i + 1, total: clips.length, status: 'error', error: `Token #${token.id} không hợp lệ, bỏ qua` });
+          continue;
+        }
+
+        await safeSend({ step: i + 1, total: clips.length, status: 'processing', prompt: clipPrompt.substring(0, 50) });
+
+        try {
+          let res;
+          if (i === 0 && !reference_id) {
+            // First clip without reference: generate new video
+            res = await generateVideoFull(apiBase, cookies, clipPrompt, { aspect_ratio, video_length: len, resolution });
+          } else {
+            // Extend from previous clip or from provided reference_id
+            const refId = (i === 0 && reference_id) ? reference_id : lastRefId;
+            const st = (i === 0 && reference_id) ? (parseFloat(start_time) || 0) : totalTime;
+            if (!refId) {
+              await safeSend({ step: i + 1, total: clips.length, status: 'error', error: 'Không có reference_id từ clip trước. Dừng project.' });
+              break;
+            }
+            res = await extendVideoFull(apiBase, cookies, clipPrompt, refId, st, { aspect_ratio, video_length: len, resolution });
+          }
+
+          lastUrl = res.url;
+          lastRefId = res.reference_id || lastRefId;
+          totalTime += len;
+          results.push({ step: i + 1, url: res.url, reference_id: res.reference_id });
+
+          await safeSend({ step: i + 1, total: clips.length, status: 'done', url: res.url, reference_id: res.reference_id, duration: totalTime });
+
+        } catch (err) {
+          const msg = err.message || '';
+          // Mark token as limited if rate limited
+          if (msg.startsWith('RATE_LIMITED') || msg.includes('429')) {
+            try {
+              await env.DB.prepare("UPDATE grok_accounts SET status = 'limited', limited_at = datetime('now') WHERE id = ? AND user_id = ?").bind(token.id, userId).run();
+            } catch {}
+            // Remove from rotation
+            tokens = tokens.filter(t => t.id !== token.id);
+            if (tokens.length === 0) {
+              await safeSend({ step: i + 1, total: clips.length, status: 'error', error: 'Tất cả token đã bị giới hạn. Dừng project.' });
+              break;
+            }
+            // Retry this clip with next token
+            i--;
+            await safeSend({ step: i + 2, total: clips.length, status: 'retry', error: `Token #${token.id} bị limit, thử token khác...` });
+            continue;
+          }
+
+          await safeSend({ step: i + 1, total: clips.length, status: 'error', error: msg.substring(0, 200) });
+          // For server errors, retry once
+          if (msg.startsWith('SERVER_ERROR') && !clips[i]._retried) {
+            clips[i] = { toString: () => clipPrompt, _retried: true, trim: () => clipPrompt };
+            i--;
+            continue;
+          }
+          break;
+        }
+      }
+
+      // Save final video to R2
+      if (lastUrl) {
+        let permanentUrl = lastUrl;
+        if (env.MEDIA) {
+          const r2Url = await saveToR2(env, lastUrl, 'video_project', historyId);
+          if (r2Url) permanentUrl = r2Url;
+        }
+        await env.DB.prepare(
+          "UPDATE history SET status = 'completed', output_url = ?, completed_at = datetime('now'), metadata = ? WHERE id = ?"
+        ).bind(permanentUrl, JSON.stringify({ clips: results.length, duration: totalTime, steps: results }), historyId).run();
+        await deductCredit(env, userId);
+        await safeSend({ status: 'completed', url: permanentUrl, historyId, clips: results.length, duration: totalTime });
+      } else {
+        await env.DB.prepare("UPDATE history SET status = 'failed', metadata = ? WHERE id = ?")
+          .bind(JSON.stringify({ error: 'Không tạo được clip nào' }), historyId).run();
+        await safeSend({ status: 'failed', error: 'Không tạo được clip nào' });
+      }
+    } catch (e) {
+      try {
+        await env.DB.prepare("UPDATE history SET status = 'failed', metadata = ? WHERE id = ?")
+          .bind(JSON.stringify({ error: e.message }), historyId).run();
+      } catch {}
+      await safeSend({ status: 'failed', error: e.message });
+    } finally {
+      await safeSend({ status: 'done_stream' });
+      await safeClose();
+    }
+  };
+
+  // Start processing (don't await — stream response immediately)
+  const chainPromise = processChain().catch(e => console.error('processChain unhandled:', e.message));
+  if (ctx && ctx.waitUntil) ctx.waitUntil(chainPromise);
+
+  return new Response(readable, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    },
+  });
+  } catch (e) {
+    console.error('handleVideoProject crash:', e.message, e.stack);
+    return jsonResponse({ error: 'Video Project lỗi: ' + e.message }, 500);
   }
 }
 

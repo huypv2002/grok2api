@@ -1041,6 +1041,7 @@ class VideoService:
                 "object": "chat.completion",
                 "created": int(time.time()),
                 "model": model,
+                "post_id": last_id or final_result.post_id or "",
                 "choices": [
                     {
                         "index": 0,

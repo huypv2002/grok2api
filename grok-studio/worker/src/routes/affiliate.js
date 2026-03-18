@@ -6,7 +6,63 @@ const POINTS_PER_DAY = Math.round(100000 / 7); // ~14,286₫ per day
 export async function handleAffiliate(request, env, user, path) {
   const userId = user.sub;
 
-  // Check if user is affiliate
+  // === PUBLIC ENDPOINTS (any logged-in user) ===
+
+  // GET /api/affiliate/status — check CTV status (is_affiliate, pending request, etc.)
+  if (request.method === 'GET' && path === '/api/affiliate/status') {
+    const me = await env.DB.prepare('SELECT id, is_affiliate, ref_code, commission_rate FROM users WHERE id = ?').bind(userId).first();
+    if (!me) return jsonResponse({ error: 'Không tìm thấy người dùng' }, 404);
+    if (me.is_affiliate) {
+      return jsonResponse({ status: 'active', ref_code: me.ref_code, commission_rate: me.commission_rate });
+    }
+    // Check for pending request
+    const pending = await env.DB.prepare(
+      "SELECT id, ref_code, note, status, reject_reason, created_at FROM affiliate_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).bind(userId).first();
+    if (pending) {
+      return jsonResponse({ status: pending.status, request: pending });
+    }
+    return jsonResponse({ status: 'none' });
+  }
+
+  // POST /api/affiliate/apply — submit CTV application
+  if (request.method === 'POST' && path === '/api/affiliate/apply') {
+    const me = await env.DB.prepare('SELECT id, is_affiliate FROM users WHERE id = ?').bind(userId).first();
+    if (!me) return jsonResponse({ error: 'Không tìm thấy người dùng' }, 404);
+    if (me.is_affiliate) return jsonResponse({ error: 'Bạn đã là CTV rồi' }, 400);
+
+    // Check for existing pending request
+    const existing = await env.DB.prepare(
+      "SELECT id FROM affiliate_requests WHERE user_id = ? AND status = 'pending'"
+    ).bind(userId).first();
+    if (existing) return jsonResponse({ error: 'Bạn đã có đơn đang chờ duyệt' }, 400);
+
+    const body = await request.json();
+    const { ref_code, note } = body;
+    if (!ref_code || ref_code.length < 3 || ref_code.length > 20) {
+      return jsonResponse({ error: 'Mã CTV phải từ 3-20 ký tự' }, 400);
+    }
+    // Only allow alphanumeric, dash, underscore
+    if (!/^[a-zA-Z0-9_\-]+$/.test(ref_code)) {
+      return jsonResponse({ error: 'Mã CTV chỉ chấp nhận chữ, số, dấu gạch ngang và gạch dưới' }, 400);
+    }
+
+    // Check ref_code uniqueness (in users and pending requests)
+    const codeInUse = await env.DB.prepare('SELECT id FROM users WHERE ref_code = ?').bind(ref_code).first();
+    if (codeInUse) return jsonResponse({ error: 'Mã CTV này đã được sử dụng' }, 409);
+    const codeInReq = await env.DB.prepare(
+      "SELECT id FROM affiliate_requests WHERE ref_code = ? AND status = 'pending'"
+    ).bind(ref_code).first();
+    if (codeInReq) return jsonResponse({ error: 'Mã CTV này đang chờ duyệt bởi người khác' }, 409);
+
+    await env.DB.prepare(
+      "INSERT INTO affiliate_requests (user_id, ref_code, note) VALUES (?, ?, ?)"
+    ).bind(userId, ref_code, note || '').run();
+
+    return jsonResponse({ message: 'Đã gửi đơn đăng ký CTV. Chờ admin duyệt.' });
+  }
+
+  // === CTV-ONLY ENDPOINTS (require is_affiliate) ===
   const me = await env.DB.prepare('SELECT id, is_affiliate, ref_code, commission_rate, plan, plan_expires FROM users WHERE id = ?').bind(userId).first();
   if (!me || !me.is_affiliate) return jsonResponse({ error: 'Bạn không phải CTV' }, 403);
 
@@ -131,10 +187,10 @@ export async function handleAffiliate(request, env, user, path) {
       return jsonResponse({ message: `Yêu cầu rút ${amount.toLocaleString()}₫ đã được gửi. Chờ admin duyệt.` });
     }
 
-    return jsonResponse({ error: 'Invalid type' }, 400);
+    return jsonResponse({ error: 'Loại không hợp lệ' }, 400);
   }
 
-  return jsonResponse({ error: 'Not found' }, 404);
+  return jsonResponse({ error: 'Không tìm thấy' }, 404);
 }
 
 // Deduct commission points by marking oldest pending commissions as 'paid'
