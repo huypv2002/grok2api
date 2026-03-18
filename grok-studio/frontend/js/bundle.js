@@ -156,6 +156,8 @@ let hViewTab='all'; // 'all' or 'sessions'
 let _sessionsData=[],_sessOpenId=null,_sessItems=[];
 // Batch state — per page, stored globally so workers survive navigation
 let BQ=[],BR=[],BD=[],batchRunning=false,batchStopped=false,batchStartTime=0,batchTimer=null,_bqId=0;
+// Video Project state — survives navigation
+let _vpState={running:false,progressHTML:'Chưa bắt đầu',stepsHTML:'',resultHTML:'',btnDisabled:false,btnText:'🎬 Bắt Đầu Tạo Project',promptsVal:'',extendMode:false,extRef:'',extSt:'0',ar:'',len:'',res:''};
 let _currentSessionId=null,_currentSessionName=null;
 const _batchStore={};
 // Each page's batch lives in _batchStore[page]. BQ/BR/BD are just pointers to current page's data.
@@ -187,6 +189,7 @@ function enter(){
 }
 function go(p){
   saveBatchState(CP);
+  if(CP==='video_project'||CP==='extend')_saveVpForm();
   CP=p;uploadedFile=null;
   // Only clear UI timer, not the batch itself
   if(batchTimer)clearInterval(batchTimer);batchTimer=null;
@@ -205,6 +208,8 @@ function go(p){
     const tEl=document.getElementById('btime');
     batchTimer=setInterval(()=>{if(tEl){const s=Math.floor((Date.now()-batchStartTime)/1000);tEl.textContent=`⏱ ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`}},1000);
   }
+  // Restore VP state when navigating back to video_project
+  if(p==='video_project'||p==='extend')_restoreVpForm();
   // Show running indicator on nav if any page has a running batch
   _updateNavBatchIndicators();
 }
@@ -347,10 +352,105 @@ function renderPage(p){
     default:return '<div class="page-title">Không tìm thấy</div>';
   }
 }
+function _saveVpForm(){
+  _vpState.promptsVal=document.getElementById('vp-prompts')?.value||'';
+  _vpState.extendMode=document.getElementById('vp-extend-mode')?.checked||false;
+  _vpState.extRef=document.getElementById('vp-ref')?.value||'';
+  _vpState.extSt=document.getElementById('vp-st')?.value||'0';
+  _vpState.ar=document.getElementById('vp-ar')?.value||'';
+  _vpState.len=document.getElementById('vp-len')?.value||'';
+  _vpState.res=document.getElementById('vp-res')?.value||'';
+  // Save live DOM state if on VP page
+  const p=document.getElementById('vp-progress');if(p)_vpState.progressHTML=p.innerHTML;
+  const s=document.getElementById('vp-steps');if(s)_vpState.stepsHTML=s.innerHTML;
+  const r=document.getElementById('vp-result');if(r)_vpState.resultHTML=r.innerHTML;
+}
+function _restoreVpForm(){
+  const ta=document.getElementById('vp-prompts');if(ta&&_vpState.promptsVal)ta.value=_vpState.promptsVal;
+  const cb=document.getElementById('vp-extend-mode');if(cb)cb.checked=_vpState.extendMode;
+  if(_vpState.extendMode){const ef=document.getElementById('vp-extend-fields');if(ef)ef.style.display=''}
+  const ref=document.getElementById('vp-ref');if(ref&&_vpState.extRef)ref.value=_vpState.extRef;
+  const st=document.getElementById('vp-st');if(st)st.value=_vpState.extSt;
+  const ar=document.getElementById('vp-ar');if(ar&&_vpState.ar)ar.value=_vpState.ar;
+  const ln=document.getElementById('vp-len');if(ln&&_vpState.len)ln.value=_vpState.len;
+  const rs=document.getElementById('vp-res');if(rs&&_vpState.res)rs.value=_vpState.res;
+  // Restore progress/steps/result
+  const p=document.getElementById('vp-progress');if(p)p.innerHTML=_vpState.progressHTML||'Chưa bắt đầu';
+  const s=document.getElementById('vp-steps');if(s)s.innerHTML=_vpState.stepsHTML||'';
+  const r=document.getElementById('vp-result');if(r)r.innerHTML=_vpState.resultHTML||'';
+  const btn=document.getElementById('vp-btn');
+  if(btn){btn.disabled=_vpState.running;btn.textContent=_vpState.running?'⏳ Đang tạo...':'🎬 Bắt Đầu Tạo Project'}
+}
 function renderVideoProject(){
   const lenOpts='<option value="6">6s / clip (tối đa 5 cảnh = 30s)</option><option value="10">10s / clip (tối đa 3 cảnh = 30s)</option>';
-  return `<div class="page-title">🎬 Video Project</div><div class="page-sub">Tạo video dài bằng cách ghép nhiều cảnh, hoặc kéo dài video có sẵn.</div><div class="gen-layout"><div class="gen-left glass-card gen-form"><div class="fg" style="margin-bottom:12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="vp-extend-mode" onchange="toggleVpExtend()" style="width:16px;height:16px"> Kéo dài từ video có sẵn (nhập Reference ID)</label></div><div id="vp-extend-fields" style="display:none"><div class="fg"><label>ID Tham Chiếu</label><input id="vp-ref" placeholder="Nhập Reference ID của video gốc"></div><div class="fg"><label>Bắt đầu từ giây</label><input type="number" id="vp-st" value="0" min="0" step="0.1"></div></div><div class="fg"><label>Kịch bản (mỗi dòng = 1 cảnh)</label><textarea id="vp-prompts" placeholder="Cảnh 1: Cô gái đi trên bãi biển lúc hoàng hôn&#10;Cảnh 2: Cô ấy quay lại nhìn camera và mỉm cười&#10;Cảnh 3: Sóng biển vỗ vào chân cô ấy&#10;Cảnh 4: Cô ấy chạy về phía biển&#10;Cảnh 5: Toàn cảnh bãi biển từ trên cao" rows="8" style="font-size:12px;line-height:1.6"></textarea></div><div class="fg-row"><div class="fg"><label>Thời lượng / cảnh</label><select id="vp-len">${lenOpts}</select></div><div class="fg"><label>Tỷ lệ</label><select id="vp-ar">${VOPTS}</select></div></div><div class="fg-row"><div class="fg"><label>Phân giải</label><select id="vp-res">${ROPTS}</select></div><div class="fg"></div></div><div style="font-size:11px;color:var(--text3);margin-bottom:12px;line-height:1.5">💡 Grok giới hạn tối đa 30s/video. Token sẽ được xoay vòng tự động nếu có nhiều.<br>📌 Bật "Kéo dài từ video có sẵn" để extend từ Reference ID thay vì tạo mới clip đầu.</div><button class="btn-primary" id="vp-btn" onclick="startVideoProject()">🎬 Bắt Đầu Tạo Project</button></div><div class="gen-right"><div class="glass-card" style="padding:16px"><div style="font-size:13px;font-weight:600;margin-bottom:12px">Tiến trình</div><div id="vp-progress" style="font-size:12px;color:var(--text2)">Chưa bắt đầu</div><div id="vp-steps" style="margin-top:12px"></div><div id="vp-result" style="margin-top:12px"></div></div></div></div><div id="lightbox"></div>`}
+  return `<div class="page-title">🎬 Video Project</div><div class="page-sub">Tạo video dài bằng cách ghép nhiều cảnh, hoặc kéo dài video có sẵn.</div>
+<div class="gen-layout"><div class="gen-left glass-card gen-form">
+<div class="fg" style="margin-bottom:12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="vp-extend-mode" onchange="toggleVpExtend()" style="width:16px;height:16px"> Kéo dài từ video có sẵn (nhập Reference ID)</label></div>
+<div id="vp-extend-fields" style="display:none"><div class="fg"><label>ID Tham Chiếu</label><input id="vp-ref" placeholder="Nhập Reference ID của video gốc"></div><div class="fg"><label>Bắt đầu từ giây</label><input type="number" id="vp-st" value="0" min="0" step="0.1"></div></div>
+<div class="fg"><label>Kịch bản (mỗi dòng = 1 cảnh)</label><textarea id="vp-prompts" placeholder="Cảnh 1: Cô gái đi trên bãi biển lúc hoàng hôn&#10;Cảnh 2: Cô ấy quay lại nhìn camera và mỉm cười&#10;Cảnh 3: Sóng biển vỗ vào chân cô ấy" rows="8" style="font-size:12px;line-height:1.6"></textarea>
+<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+<input type="file" id="vp-txt-inp" accept=".txt" multiple style="display:none">
+<button class="btn-s" onclick="document.getElementById('vp-txt-inp').click()">📄 Import TXT</button>
+<input type="file" id="vp-folder-inp" webkitdirectory style="display:none">
+<button class="btn-s" onclick="document.getElementById('vp-folder-inp').click()">📁 Import Folder</button>
+</div></div>
+<div class="fg-row"><div class="fg"><label>Thời lượng / cảnh</label><select id="vp-len">${lenOpts}</select></div><div class="fg"><label>Tỷ lệ</label><select id="vp-ar">${VOPTS}</select></div></div>
+<div class="fg-row"><div class="fg"><label>Phân giải</label><select id="vp-res">${ROPTS}</select></div><div class="fg"></div></div>
+<div style="font-size:11px;color:var(--text3);margin-bottom:12px;line-height:1.5">💡 Grok giới hạn tối đa 30s/video. Token sẽ được xoay vòng tự động nếu có nhiều.<br>📄 Import TXT: mỗi dòng = 1 cảnh. Nhiều file TXT = nhiều project tự chia.</div>
+<button class="btn-primary" id="vp-btn" onclick="startVideoProject()">🎬 Bắt Đầu Tạo Project</button>
+</div><div class="gen-right">
+<div class="glass-card" style="padding:16px"><div style="font-size:13px;font-weight:600;margin-bottom:12px">Tiến trình</div><div id="vp-progress" style="font-size:12px;color:var(--text2)">Chưa bắt đầu</div><div id="vp-steps" style="margin-top:12px"></div><div id="vp-result" style="margin-top:12px"></div></div>
+<div class="glass-card" style="padding:16px;margin-top:12px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-size:13px;font-weight:600">📋 Lịch sử VP</span><button class="btn-s" onclick="loadVpHistory()" style="font-size:11px">🔄</button></div><div id="vp-hist-grid"></div></div>
+</div></div><div id="lightbox"></div>`}
 function toggleVpExtend(){const on=document.getElementById('vp-extend-mode')?.checked;document.getElementById('vp-extend-fields').style.display=on?'':'none'}
+function vpLoadTxt(fileList){
+  if(!fileList||!fileList.length)return;
+  const ta=document.getElementById('vp-prompts');if(!ta)return;
+  let allLines=[];let loaded=0;const total=Array.from(fileList).filter(f=>f.name.endsWith('.txt')).length;
+  if(!total){toast('Không tìm thấy file .txt','err');return}
+  Array.from(fileList).forEach(f=>{
+    if(!f.name.endsWith('.txt'))return;
+    const r=new FileReader();
+    r.onload=e=>{
+      const lines=e.target.result.split('\n').map(l=>l.trim()).filter(l=>l&&!l.startsWith('#'));
+      allLines=allLines.concat(lines);
+      loaded++;
+      if(loaded>=total){
+        const cur=ta.value.trim();
+        ta.value=cur?(cur+'\n'+allLines.join('\n')):allLines.join('\n');
+        toast(allLines.length+' cảnh đã import','ok');
+      }
+    };
+    r.readAsText(f);
+  });
+}
+function vpLoadFolder(fileList){
+  if(!fileList||!fileList.length)return;
+  const txtFiles=Array.from(fileList).filter(f=>f.name.endsWith('.txt')).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  if(!txtFiles.length){toast('Folder không chứa file .txt','err');return}
+  vpLoadTxt(txtFiles);
+}
+async function loadVpHistory(){
+  const g=document.getElementById('vp-hist-grid');if(!g)return;
+  g.innerHTML='<span class="spin"></span>';
+  try{
+    const d=await API.history('type=text2video&limit=20');
+    const items=(d.history||[]).filter(h=>h.session_id&&h.session_id.startsWith('vp_'));
+    if(!items.length){g.innerHTML='<div style="font-size:12px;color:var(--text3)">Chưa có project nào</div>';return}
+    g.innerHTML=items.map(h=>{
+      const st=h.status==='completed'?'✅':h.status==='failed'?'❌':'⏳';
+      const pr=(h.prompt||'').substring(0,80);
+      const dt=h.created_at?new Date(h.created_at).toLocaleString('vi-VN'):'';
+      const meta=h.metadata?JSON.parse(h.metadata||'{}'):{};
+      const info=meta.clips?`${meta.clips} cảnh, ${meta.duration||0}s`:'';
+      const hasUrl=h.output_url&&h.output_url.startsWith('http');
+      return `<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px">
+        <div style="display:flex;align-items:center;gap:6px">${st} <span style="color:var(--text2)">${dt}</span>${info?`<span style="color:var(--accent);font-size:11px">${info}</span>`:''}</div>
+        <div style="color:var(--text3);margin-top:2px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(pr)}</div>
+        ${hasUrl?`<div style="margin-top:4px;display:flex;gap:6px"><a href="${h.output_url}" target="_blank" class="btn-s" style="font-size:10px;padding:3px 8px">▶ Xem</a><button class="btn-s" style="font-size:10px;padding:3px 8px" onclick="dlProxy('${h.output_url}','vp-${h.id}.mp4')">⬇</button></div>`:''}
+      </div>`}).join('');
+  }catch(e){g.innerHTML='<div style="font-size:12px;color:var(--err)">Lỗi: '+e.message+'</div>'}
+}
 function renderHistory(){return `<div class="page-title">Lịch sử</div><div class="page-sub">Các lần tạo của bạn</div><div class="glass-card" style="padding:12px 16px;margin-bottom:16px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15)"><div style="font-size:13px;font-weight:600;color:var(--warn)">⚠️ Quan trọng: File chỉ lưu trữ trong 24 giờ</div><div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.5">Video và ảnh sẽ tự động bị xóa sau 24h. Hãy tải về máy ngay sau khi tạo xong để không bị mất.</div></div><div style="display:flex;gap:8px;margin-bottom:14px"><button class="fbtn ${hViewTab==='all'?'on':''}" onclick="switchHistTab('all',this)">📋 Tất cả</button><button class="fbtn ${hViewTab==='sessions'?'on':''}" onclick="switchHistTab('sessions',this)">📁 Theo phiên</button></div><div id="hist-all" style="${hViewTab==='all'?'':'display:none'}"><div id="hstats" style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap"></div><div class="filters" id="hfilters"><button class="fbtn on" onclick="hFilter(null,this)">Tất cả</button><button class="fbtn" onclick="hFilter('text2video',this)">T→V</button><button class="fbtn" onclick="hFilter('image2video',this)">I→V</button><button class="fbtn" onclick="hFilter('text2image',this)">T→I</button><button class="fbtn" onclick="hFilter('image2image',this)">I→I</button><button class="fbtn" onclick="hFilter('extend_video',this)">Ext</button><button class="fbtn" onclick="hFilter('video_project',this)">VP</button><button class="fbtn" onclick="hFilter('__fav',this)">★ Yêu thích</button><span style="flex:1"></span><button class="btn-s" id="hview-btn" onclick="toggleHView()" title="Đổi kiểu xem">${hViewMode==='grid'?'☰ List':'▦ Grid'}</button><button class="btn-s" id="hsel-btn" onclick="toggleSelectMode()">☐ Chọn</button></div><div class="hfilter-row" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center"><select id="hstatus" onchange="hStatusFilter(this.value)" style="width:auto;padding:6px 10px;font-size:11px"><option value="">Tất cả trạng thái</option><option value="completed">✓ Hoàn thành</option><option value="failed">✕ Thất bại</option><option value="processing">⏳ Đang xử lý</option></select><input type="date" id="hdate-from" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Từ ngày"><input type="date" id="hdate-to" onchange="hDateFilter()" style="width:auto;padding:6px 10px;font-size:11px" title="Đến ngày"><button class="btn-s" onclick="clearDateFilter()" style="font-size:11px;padding:6px 10px" title="Xóa bộ lọc ngày">✕ Xóa lọc</button></div><div id="hbulk" style="display:none;margin-bottom:12px;gap:8px;flex-wrap:wrap;align-items:center"></div><div class="${hViewMode==='grid'?'hist-grid':'hist-list'}" id="hgrid"></div></div><div id="hist-sessions" style="${hViewTab==='sessions'?'':'display:none'}"><div id="sess-list"><div class="spin-lg"></div></div></div><div id="lightbox"></div>`}
 function renderAccounts(){return `<div class="page-title">Cài đặt Token</div><div class="page-sub">Quản lý cookie/token Grok. Dán cookie JSON hoặc SSO token. Video cần cf_clearance.</div><div class="glass-card" id="cf-diag" style="padding:14px 18px;margin-bottom:16px;font-size:12px;color:var(--text2);line-height:1.6"><span class="spin"></span> Đang kiểm tra...</div><div id="acc-limit-info"></div><div class="acc-add"><textarea id="ntok" placeholder='Dán cookie JSON (hỗ trợ nhiều token, mỗi JSON array 1 dòng)&#10;Ví dụ:&#10;[{"name":"sso","value":"xxx",...}]&#10;[{"name":"sso","value":"yyy",...}]' style="min-height:100px;font-size:11px;font-family:monospace"></textarea><div style="display:flex;gap:8px"><input id="nlbl" placeholder="Nhãn (tùy chọn)" style="max-width:160px"><button class="btn-primary" onclick="addAcc()" style="width:auto;padding:11px 20px">Thêm</button></div><div style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.5">💡 Hỗ trợ thêm nhiều token cùng lúc: mỗi cookie JSON array trên 1 dòng, hoặc mỗi SSO token trên 1 dòng.</div></div><div id="acc-bulk-bar" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:10px;gap:8px;flex-wrap:wrap;align-items:center"></div><div id="alist"></div><div id="acc-modal"></div>`}
 
@@ -371,16 +471,17 @@ async function startVideoProject(){
   const clips=lines.slice(0,maxClips);
   const ar=document.getElementById('vp-ar')?.value||'16:9';
   const res=document.getElementById('vp-res')?.value||'480p';
-  const btn=document.getElementById('vp-btn');
-  const prog=document.getElementById('vp-progress');
-  const steps=document.getElementById('vp-steps');
-  const result=document.getElementById('vp-result');
-  if(btn)btn.disabled=true;
-  if(btn)btn.textContent='⏳ Đang tạo...';
-  if(prog)prog.innerHTML='<span class="spin"></span> Đang khởi tạo project...';
-  if(steps)steps.innerHTML='';
-  if(result)result.innerHTML='';
-  // Generate session
+  // Update UI + state
+  _vpState.running=true;
+  _vpState.progressHTML='<span class="spin"></span> Đang khởi tạo project...';
+  _vpState.stepsHTML='';_vpState.resultHTML='';
+  const _vpUpdate=()=>{
+    const p=document.getElementById('vp-progress');if(p)p.innerHTML=_vpState.progressHTML;
+    const s=document.getElementById('vp-steps');if(s)s.innerHTML=_vpState.stepsHTML;
+    const r=document.getElementById('vp-result');if(r)r.innerHTML=_vpState.resultHTML;
+    const b=document.getElementById('vp-btn');if(b){b.disabled=_vpState.running;b.textContent=_vpState.running?'⏳ Đang tạo...':'🎬 Bắt Đầu Tạo Project'}
+  };
+  _vpUpdate();
   const sessId='vp_'+Date.now();
   const sessName='Video Project '+new Date().toLocaleString('vi-VN');
   const payload={prompts:clips,aspect_ratio:ar,video_length:len,resolution:res,session_id:sessId,session_name:sessName};
@@ -409,34 +510,38 @@ async function startVideoProject(){
         if(!line)continue;
         let d;try{d=JSON.parse(line)}catch{continue}
         if(d.status==='processing'){
-          if(prog)prog.innerHTML=`<span class="spin"></span> Đang tạo cảnh ${d.step}/${d.total}: ${d.prompt||''}...`;
-          if(steps)steps.innerHTML+=`<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px">⏳ Cảnh ${d.step}: ${d.prompt||''}</div>`;
+          _vpState.progressHTML=`<span class="spin"></span> Đang tạo cảnh ${d.step}/${d.total}: ${esc(d.prompt||'')}...`;
+          _vpState.stepsHTML+=`<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px">⏳ Cảnh ${d.step}: ${esc(d.prompt||'')}</div>`;
         }else if(d.status==='done'&&d.step){
-          if(prog)prog.innerHTML=`✅ Cảnh ${d.step}/${d.total} hoàn thành (${d.duration||0}s)`;
-          // Update last step entry
-          const stepEls=steps?.querySelectorAll('div');
-          if(stepEls&&stepEls.length>0){
-            const last=stepEls[stepEls.length-1];
-            last.innerHTML=`<div style="display:flex;align-items:center;gap:8px">✅ Cảnh ${d.step} <a href="${d.url}" target="_blank" style="color:var(--accent);font-size:11px">Xem</a></div>`;
-          }
+          _vpState.progressHTML=`✅ Cảnh ${d.step}/${d.total} hoàn thành (${d.duration||0}s)`;
+          // Replace last step entry
+          const tmp=document.createElement('div');tmp.innerHTML=_vpState.stepsHTML;
+          const divs=tmp.querySelectorAll('div');
+          if(divs.length>0){divs[divs.length-1].innerHTML=`<div style="display:flex;align-items:center;gap:8px">✅ Cảnh ${d.step} <a href="${d.url}" target="_blank" style="color:var(--accent);font-size:11px">Xem</a></div>`}
+          _vpState.stepsHTML=tmp.innerHTML;
         }else if(d.status==='retry'){
-          if(prog)prog.innerHTML=`🔄 ${d.error||'Đang thử lại...'}`;
+          _vpState.progressHTML=`🔄 ${esc(d.error||'Đang thử lại...')}`;
         }else if(d.status==='error'){
-          if(prog)prog.innerHTML=`❌ Cảnh ${d.step}: ${d.error||'Lỗi'}`;
-          if(steps)steps.innerHTML+=`<div style="padding:6px 0;color:var(--err);font-size:12px">❌ Cảnh ${d.step}: ${d.error||'Lỗi'}</div>`;
+          _vpState.progressHTML=`❌ Cảnh ${d.step}: ${esc(d.error||'Lỗi')}`;
+          _vpState.stepsHTML+=`<div style="padding:6px 0;color:var(--err);font-size:12px">❌ Cảnh ${d.step}: ${esc(d.error||'Lỗi')}</div>`;
         }else if(d.status==='completed'){
-          if(prog)prog.innerHTML=`🎉 Hoàn thành! ${d.clips} cảnh, tổng ${d.duration}s`;
-          if(result)result.innerHTML=`<div style="margin-top:12px"><video src="${d.url}" controls style="width:100%;border-radius:10px;max-height:400px"></video><div style="margin-top:8px;display:flex;gap:8px"><a href="${d.url}" target="_blank" class="btn-s">🔗 Mở</a><button class="btn-s" onclick="dlProxy('${d.url}','video-project.mp4')">⬇ Tải về</button></div></div>`;
+          _vpState.progressHTML=`🎉 Hoàn thành! ${d.clips} cảnh, tổng ${d.duration}s`;
+          _vpState.resultHTML=`<div style="margin-top:12px"><video src="${d.url}" controls style="width:100%;border-radius:10px;max-height:400px"></video><div style="margin-top:8px;display:flex;gap:8px"><a href="${d.url}" target="_blank" class="btn-s">🔗 Mở</a><button class="btn-s" onclick="dlProxy('${d.url}','video-project.mp4')">⬇ Tải về</button></div></div>`;
         }else if(d.status==='failed'){
-          if(prog)prog.innerHTML=`❌ Thất bại: ${d.error||'Lỗi không xác định'}`;
+          _vpState.progressHTML=`❌ Thất bại: ${esc(d.error||'Lỗi không xác định')}`;
         }
+        _vpUpdate();
       }
     }
   }catch(e){
-    if(prog)prog.innerHTML=`❌ Lỗi: ${e.message}`;
+    _vpState.progressHTML=`❌ Lỗi: ${esc(e.message)}`;
+    _vpUpdate();
     toast(e.message,'err');
   }finally{
-    if(btn){btn.disabled=false;btn.textContent='🎬 Bắt Đầu Tạo Project'}
+    _vpState.running=false;
+    _vpUpdate();
+    // Refresh VP history
+    loadVpHistory();
   }
 }
 
@@ -449,6 +554,14 @@ function afterRender(p){
   // Check token status on gen pages
   const genPages=['text2video','image2video','text2image','image2image','video_project'];
   if(genPages.includes(p))_checkAndShowTokenStatus();
+  // VP file inputs + history
+  if(p==='video_project'||p==='extend'){
+    const vpTxt=document.getElementById('vp-txt-inp');
+    if(vpTxt)vpTxt.addEventListener('change',function(){vpLoadTxt(this.files);this.value=''});
+    const vpFolder=document.getElementById('vp-folder-inp');
+    if(vpFolder)vpFolder.addEventListener('change',function(){vpLoadFolder(this.files);this.value=''});
+    loadVpHistory();
+  }
   // Bind batch file inputs
   const isImgType=p==='image2video'||p==='image2image';
   const txtInp=document.getElementById('btxt-inp');
