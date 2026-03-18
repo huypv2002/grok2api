@@ -434,7 +434,7 @@ async function loadVpHistory(){
   const g=document.getElementById('vp-hist-grid');if(!g)return;
   g.innerHTML='<span class="spin"></span>';
   try{
-    const d=await API.history('type=text2video&limit=20');
+    const d=await API.getHistory('text2video',20);
     const items=(d.history||[]).filter(h=>h.session_id&&h.session_id.startsWith('vp_'));
     if(!items.length){g.innerHTML='<div style="font-size:12px;color:var(--text3)">Chưa có project nào</div>';return}
     g.innerHTML=items.map(h=>{
