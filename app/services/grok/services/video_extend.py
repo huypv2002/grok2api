@@ -141,16 +141,22 @@ class VideoExtendService:
         if token.startswith("sso="):
             token = token[4:]
 
-        # Theo curl thực tế từ Grok.com: extend chỉ là video gen thường với parentPostId
-        # KHÔNG dùng isVideoExtension, extendPostId, stitchWithExtendPostId
         model_config_override = {
             "modelMap": {
                 "videoGenModelConfig": {
-                    "parentPostId": reference_id,
+                    "isVideoExtension": True,
+                    "videoExtensionStartTime": float(start_time),
+                    "extendPostId": reference_id,
+                    "stitchWithExtendPostId": True,
+                    "originalPrompt": prompt,
+                    "originalPostId": reference_id,
+                    "originalRefType": "ORIGINAL_REF_TYPE_VIDEO_EXTENSION",
+                    "mode": "custom",
                     "aspectRatio": aspect_ratio,
                     "videoLength": video_length,
-                    "isVideoEdit": False,
                     "resolutionName": resolution_name,
+                    "parentPostId": reference_id,
+                    "isVideoEdit": False,
                 }
             }
         }
