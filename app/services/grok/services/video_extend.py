@@ -144,18 +144,10 @@ class VideoExtendService:
         model_config_override = {
             "modelMap": {
                 "videoGenModelConfig": {
-                    "isVideoExtension": True,
-                    "videoExtensionStartTime": float(start_time),
-                    "extendPostId": reference_id,
-                    "stitchWithExtendPostId": True,
-                    "originalPrompt": prompt,
-                    "originalPostId": reference_id,
-                    "originalRefType": "ORIGINAL_REF_TYPE_VIDEO_EXTENSION",
-                    "mode": "custom",
+                    "parentPostId": reference_id,
                     "aspectRatio": aspect_ratio,
                     "videoLength": video_length,
                     "resolutionName": resolution_name,
-                    "parentPostId": reference_id,
                     "isVideoEdit": False,
                 }
             }
