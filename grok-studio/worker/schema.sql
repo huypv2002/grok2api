@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   name TEXT DEFAULT '',
-  role TEXT DEFAULT 'user' CHECK(role IN ('user','admin')),
+  role TEXT DEFAULT 'user' CHECK(role IN ('user','admin','superadmin')),
   plan TEXT DEFAULT 'free',
   credits INTEGER DEFAULT 10,
   daily_limit INTEGER DEFAULT -1,

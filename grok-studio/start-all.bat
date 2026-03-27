@@ -6,22 +6,40 @@ echo ============================================
 echo.
 
 :: 1. Start Grok2API (Granian + auto-restart watchdog)
-echo [1/4] Starting Grok2API (Granian, auto-restart)...
+echo [1/5] Starting Grok2API (Granian, auto-restart)...
 start "Grok2API" cmd /k "C:\grok-studio\grok2api-watchdog.bat"
 echo   Waiting for Grok2API to start...
 timeout /t 8 /nobreak >nul
 
-:: 2. Configure Grok2API (video_format=url)
-echo [2/4] Configuring Grok2API...
-curl -s -X POST http://localhost:8000/v1/admin/config -H "Authorization: Bearer grok2api" -H "Content-Type: application/json" -d "{\"app\":{\"video_format\":\"url\"}}" >nul 2>&1
+:: 2. Configure Grok2API
+echo [2/5] Configuring Grok2API...
+curl -s -X POST http://localhost:8000/v1/admin/config -H "Authorization: Bearer grok2api" -H "Content-Type: application/json" -d "{\"app\":{\"video_format\":\"url\"},\"proxy\":{\"browser\":\"chrome131\"}}" >nul 2>&1
 echo   OK
 
-:: 3. Start Cloudflared Named Tunnel
-echo [3/4] Starting Cloudflared Tunnel (api.liveyt.pro)...
+:: 3. Ensure cloudflared config exists
+echo [3/5] Checking cloudflared config...
+set CF_DIR=%USERPROFILE%\.cloudflared
+set CF_CFG=%CF_DIR%\config.yml
+if not exist "%CF_CFG%" (
+    echo   Config not found, creating %CF_CFG%...
+    echo tunnel: grok-api> "%CF_CFG%"
+    echo credentials-file: %CF_DIR%\418c6e70-000e-4cf8-8b84-6d858ba3823d.json>> "%CF_CFG%"
+    echo.>> "%CF_CFG%"
+    echo ingress:>> "%CF_CFG%"
+    echo   - hostname: api.liveyt.pro>> "%CF_CFG%"
+    echo     service: http://localhost:8000>> "%CF_CFG%"
+    echo   - service: http_status:404>> "%CF_CFG%"
+    echo   Created.
+) else (
+    echo   Config exists: %CF_CFG%
+)
+
+:: 4. Start Cloudflared Named Tunnel
+echo [4/5] Starting Cloudflared Tunnel (api.liveyt.pro)...
 start "Cloudflared" cmd /k "cloudflared tunnel run grok-api"
 
-:: 4. Start CF auto-refresh service (zendriver)
-echo [4/4] Starting CF auto-refresh (zendriver)...
+:: 5. Start CF auto-refresh service (zendriver)
+echo [5/5] Starting CF auto-refresh (zendriver)...
 start "CF-Refresh" cmd /k "cd /d C:\grok2api && .venv\Scripts\activate && python C:\grok-studio\cf_service_win.py"
 
 echo.
@@ -33,7 +51,7 @@ echo   Grok2API:    http://localhost:8000 (Granian)
 echo   Tunnel:      https://api.liveyt.pro
 echo   CF Refresh:  zendriver (every 25 min)
 echo.
-echo   3 windows opened - keep them all running.
+echo   4 windows opened - keep them all running.
 echo   This window can be closed safely.
 echo.
 pause >nul

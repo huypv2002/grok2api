@@ -155,22 +155,22 @@ let hF=null,hSel=new Set(),hSelectMode=false,hStatus=null,hDateFrom='',hDateTo='
 let hViewTab='all'; // 'all' or 'sessions'
 let _sessionsData=[],_sessOpenId=null,_sessItems=[];
 // Batch state — per page, stored globally so workers survive navigation
-let BQ=[],BR=[],BD=[],batchRunning=false,batchStopped=false,batchStartTime=0,batchTimer=null,_bqId=0;
+let BQ=[],BR=[],BD=[],batchRunning=false,batchStopped=false,batchStartTime=0,batchTimer=null,_bqId=0,_bqStt=0;
 // Video Project state — survives navigation
-let _vpState={running:false,progressHTML:'Chưa bắt đầu',stepsHTML:'',resultHTML:'',btnDisabled:false,btnText:'🎬 Bắt Đầu Tạo Project',promptsVal:'',extendMode:false,extRef:'',extSt:'0',ar:'',len:'',res:''};
+let _vpState={running:false,progressHTML:'Chưa bắt đầu',stepsHTML:'',resultHTML:'',btnDisabled:false,btnText:'🎬 Bắt Đầu Tạo Project',promptsVal:'',extendMode:false,extRef:'',extSt:'0',ar:'',len:'',res:'',imgPreview:''};
 let _currentSessionId=null,_currentSessionName=null;
 const _batchStore={};
 // Each page's batch lives in _batchStore[page]. BQ/BR/BD are just pointers to current page's data.
-function _ensureStore(page){if(!_batchStore[page])_batchStore[page]={BQ:[],BR:[],BD:[],running:false,stopped:false,startTime:0,id:0,opts:null,type:null,uploadedFile:null}}
+function _ensureStore(page){if(!_batchStore[page])_batchStore[page]={BQ:[],BR:[],BD:[],running:false,stopped:false,startTime:0,id:0,stt:0,opts:null,type:null,uploadedFile:null}}
 function saveBatchState(page){
   _ensureStore(page);
   const s=_batchStore[page];
-  s.BQ=BQ;s.BR=BR;s.BD=BD;s.running=batchRunning;s.stopped=batchStopped;s.startTime=batchStartTime;s.id=_bqId;s.uploadedFile=uploadedFile;
+  s.BQ=BQ;s.BR=BR;s.BD=BD;s.running=batchRunning;s.stopped=batchStopped;s.startTime=batchStartTime;s.id=_bqId;s.stt=_bqStt;s.uploadedFile=uploadedFile;
 }
 function loadBatchState(page){
   _ensureStore(page);
   const s=_batchStore[page];
-  BQ=s.BQ;BR=s.BR;BD=s.BD;batchRunning=s.running;batchStopped=s.stopped;batchStartTime=s.startTime;_bqId=s.id;
+  BQ=s.BQ;BR=s.BR;BD=s.BD;batchRunning=s.running;batchStopped=s.stopped;batchStartTime=s.startTime;_bqId=s.id;_bqStt=s.stt||0;
   if(s.uploadedFile)uploadedFile=s.uploadedFile;
 }
 let hViewMode=localStorage.getItem('gs_hview')||'grid'; // 'grid' or 'list'
@@ -286,15 +286,11 @@ function batchPanel(){
   const importBtns=isImgType?`
       <input type="file" id="btxt-inp" accept=".txt" style="display:none">
       <input type="file" id="bimg-inp" webkitdirectory style="display:none">
-      <button class="btn-s" onclick="importPairMode()">📄+📁 TXT + Folder ảnh</button>
-      <input type="file" id="bfolder-inp" webkitdirectory style="display:none">
-      <button class="btn-s" onclick="document.getElementById('bfolder-inp').click()">📂 Folder tổng</button>
+      <button class="btn-s" onclick="openPairModal()">📄+🖼 Import TXT + Ảnh</button>
       <button class="btn-s danger" onclick="clearBatch()" id="bclear" style="display:none">🗑 Xóa hết</button>
   `:`
       <input type="file" id="btxt-inp" accept=".txt" multiple style="display:none">
       <button class="btn-s" onclick="document.getElementById('btxt-inp').click()">📄 TXT</button>
-      <input type="file" id="bfolder-inp" webkitdirectory style="display:none">
-      <button class="btn-s" onclick="document.getElementById('bfolder-inp').click()">📁 Folder</button>
       <button class="btn-s" onclick="addFromPrompt()">+ Thêm</button>
       <button class="btn-s danger" onclick="clearBatch()" id="bclear" style="display:none">🗑 Xóa hết</button>
   `;
@@ -302,16 +298,11 @@ function batchPanel(){
   <div class="bp-header"><span style="font-weight:600;font-size:13px">📋 Chế Độ Hàng Loạt</span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">${importBtns}</div>
   </div>
-  ${isImgType?'<div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">💡 TXT+Folder: dòng 1 → ảnh 1, dòng 2 → ảnh 2...<br>Folder tổng: mỗi subfolder chứa ảnh + file .txt cùng tên</div>':''}
-  <div id="bconcurrency" style="display:none;margin-bottom:8px">
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <span style="font-size:12px;color:var(--text2)">⚡ Luồng/acc:</span>
-      <select id="bthreads" style="width:60px;padding:4px 6px;font-size:12px"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select>
-      <span style="font-size:12px;color:var(--text2)">🔄 Thử lại:</span>
-      <select id="bretries" style="width:60px;padding:4px 6px;font-size:12px"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select>
-      <span id="bworker-info" style="font-size:11px;color:var(--text3)"></span>
-    </div>
-  </div>
+  ${isImgType?'<div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">💡 Mỗi dòng trong TXT = 1 prompt, ghép với ảnh theo thứ tự tên file.</div>':''}
+  <!-- Ẩn cài đặt luồng/acc - chỉ dùng 1 luồng để ổn định -->
+  <input type="hidden" id="bthreads" value="1">
+  <input type="hidden" id="bretries" value="2">
+  <div id="bconcurrency" style="display:none"></div>
   <div id="bstats" class="bp-stats" style="display:none"></div>
   <div id="bprogress" style="display:none"><div class="progress-bar"><div class="progress-fill" id="bpfill"></div></div><div class="bp-time" id="btime"></div></div>
   <div id="bactions" style="display:none;gap:8px;margin:8px 0">
@@ -387,6 +378,7 @@ function renderVideoProject(){
 <div class="gen-layout"><div class="gen-left glass-card gen-form">
 <div class="fg" style="margin-bottom:12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="vp-extend-mode" onchange="toggleVpExtend()" style="width:16px;height:16px"> Kéo dài từ video có sẵn (nhập Reference ID)</label></div>
 <div id="vp-extend-fields" style="display:none"><div class="fg"><label>ID Tham Chiếu</label><input id="vp-ref" placeholder="Nhập Reference ID của video gốc"></div><div class="fg"><label>Bắt đầu từ giây</label><input type="number" id="vp-st" value="0" min="0" step="0.1"></div></div>
+${CU?.role==='superadmin'?`<div id="vp-img2vid-section" style="margin-bottom:12px;padding:12px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.2);border-radius:10px"><div style="font-size:12px;font-weight:600;color:#a78bfa;margin-bottom:8px">🖼️ Ảnh → Video (Superadmin)</div><div style="font-size:11px;color:var(--text3);margin-bottom:8px">Chọn ảnh để tạo video từ ảnh. Khi có ảnh, chỉ cần 1 dòng prompt.</div><input type="file" id="vp-img-inp" accept="image/*" style="display:none" onchange="vpSelectImg(this)"><div style="display:flex;gap:8px;align-items:center"><button class="btn-s" onclick="document.getElementById('vp-img-inp').click()">📷 Chọn ảnh</button><span id="vp-img-name" style="font-size:11px;color:var(--text3)">Chưa chọn</span><button class="btn-s" id="vp-img-clear" style="display:none;color:var(--err)" onclick="vpClearImg()">✕</button></div><div id="vp-img-preview" style="margin-top:8px"></div></div>`:''}
 <div class="fg"><label>Kịch bản (mỗi dòng = 1 cảnh)</label><textarea id="vp-prompts" placeholder="Cảnh 1: Cô gái đi trên bãi biển lúc hoàng hôn&#10;Cảnh 2: Cô ấy quay lại nhìn camera và mỉm cười&#10;Cảnh 3: Sóng biển vỗ vào chân cô ấy" rows="8" style="font-size:12px;line-height:1.6"></textarea>
 <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
 <input type="file" id="vp-txt-inp" accept=".txt" multiple style="display:none">
@@ -403,6 +395,25 @@ function renderVideoProject(){
 <div class="glass-card" style="padding:16px;margin-top:12px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-size:13px;font-weight:600">📋 Lịch sử VP</span><button class="btn-s" onclick="loadVpHistory()" style="font-size:11px">🔄</button></div><div id="vp-hist-grid"></div></div>
 </div></div><div id="lightbox"></div>`}
 function toggleVpExtend(){const on=document.getElementById('vp-extend-mode')?.checked;document.getElementById('vp-extend-fields').style.display=on?'':'none'}
+function vpSelectImg(inp){
+  const f=inp.files?.[0];if(!f)return;
+  document.getElementById('vp-img-name').textContent=f.name;
+  document.getElementById('vp-img-clear').style.display='';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    _vpState.imgPreview=e.target.result;
+    const prev=document.getElementById('vp-img-preview');
+    if(prev)prev.innerHTML=`<img src="${e.target.result}" style="max-height:120px;max-width:100%;border-radius:8px;object-fit:contain">`;
+  };
+  reader.readAsDataURL(f);
+}
+function vpClearImg(){
+  _vpState.imgPreview='';
+  const inp=document.getElementById('vp-img-inp');if(inp)inp.value='';
+  const nm=document.getElementById('vp-img-name');if(nm)nm.textContent='Chưa chọn';
+  const cl=document.getElementById('vp-img-clear');if(cl)cl.style.display='none';
+  const prev=document.getElementById('vp-img-preview');if(prev)prev.innerHTML='';
+}
 function vpLoadTxt(fileList){
   if(!fileList||!fileList.length)return;
   const ta=document.getElementById('vp-prompts');if(!ta)return;
@@ -462,15 +473,48 @@ async function startVideoProject(){
   const isExtendMode=document.getElementById('vp-extend-mode')?.checked;
   const extRef=(document.getElementById('vp-ref')?.value||'').trim();
   const extSt=parseFloat(document.getElementById('vp-st')?.value||'0')||0;
+  const ar=document.getElementById('vp-ar')?.value||'16:9';
+  const res=document.getElementById('vp-res')?.value||'480p';
+  const len=parseInt(document.getElementById('vp-len')?.value||'6');
+
+  // ── Superadmin: Image → Video mode ──
+  if(CU?.role==='superadmin'&&_vpState.imgPreview){
+    if(!lines.length){toast('Nhập prompt cho video','err');return}
+    const prompt=lines[0];
+    _vpState.running=true;
+    _vpState.progressHTML='<span class="spin"></span> Đang tạo video từ ảnh...';
+    _vpState.stepsHTML='';_vpState.resultHTML='';
+    const _upd=()=>{
+      const p=document.getElementById('vp-progress');if(p)p.innerHTML=_vpState.progressHTML;
+      const s=document.getElementById('vp-steps');if(s)s.innerHTML=_vpState.stepsHTML;
+      const r=document.getElementById('vp-result');if(r)r.innerHTML=_vpState.resultHTML;
+      const b=document.getElementById('vp-btn');if(b){b.disabled=_vpState.running;b.textContent=_vpState.running?'⏳ Đang tạo...':'🎬 Bắt Đầu Tạo Project'}
+    };
+    _upd();
+    try{
+      const resp=await fetch('/api/generate',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+API.token},
+        body:JSON.stringify({type:'image2video',prompt,image_url:_vpState.imgPreview,aspect_ratio:ar,video_length:len,resolution:res})
+      });
+      const data=await resp.json();
+      if(!resp.ok||data.error)throw new Error(data.error||'Tạo video thất bại');
+      const url=data.outputUrl||data.url;      _vpState.progressHTML='✅ Hoàn thành!';
+      _vpState.resultHTML=`<div style="margin-top:12px"><video src="${url}" controls style="width:100%;border-radius:10px;max-height:400px"></video><div style="margin-top:8px;display:flex;gap:8px"><a href="${url}" target="_blank" class="btn-s">🔗 Mở</a><button class="btn-s" onclick="dlProxy('${url}','img2video.mp4')">⬇ Tải về</button></div></div>`;
+    }catch(e){
+      _vpState.progressHTML=`❌ Thất bại: ${esc(e.message||'Lỗi không xác định')}`;
+    }finally{
+      _vpState.running=false;_upd();
+    }
+    return;
+  }
+
   if(isExtendMode&&!extRef){toast('Nhập Reference ID của video gốc','err');return}
   if(!isExtendMode&&lines.length<2){toast('Cần ít nhất 2 cảnh','err');return}
   if(isExtendMode&&lines.length<1){toast('Cần ít nhất 1 cảnh','err');return}
-  const len=parseInt(document.getElementById('vp-len')?.value||'6');
   const maxClips=Math.floor(30/len);
   if(lines.length>maxClips){toast(`Tối đa ${maxClips} cảnh với ${len}s/clip (giới hạn 30s). Đã cắt bớt.`,'warn')}
   const clips=lines.slice(0,maxClips);
-  const ar=document.getElementById('vp-ar')?.value||'16:9';
-  const res=document.getElementById('vp-res')?.value||'480p';
   // Update UI + state
   _vpState.running=true;
   _vpState.progressHTML='<span class="spin"></span> Đang khởi tạo project...';
@@ -574,8 +618,6 @@ function afterRender(p){
   }
   const imgInp=document.getElementById('bimg-inp');
   if(imgInp)imgInp.addEventListener('change',function(){onPairImgSelected(this.files);this.value=''});
-  const folderInp=document.getElementById('bfolder-inp');
-  if(folderInp)folderInp.addEventListener('change',function(){loadFolderTxt(this.files);this.value=''});
 }
 
 /* ========== FILE UPLOAD ========== */
@@ -621,7 +663,7 @@ async function dlProxy(url,name){
 // BR = currently running, BD = completed/failed
 let _batchTabIdx=0;
 
-function resetBatch(){BQ=[];BR=[];BD=[];batchRunning=false;batchStopped=false;_bqId=0;_currentSessionId=null;_currentSessionName=null;if(batchTimer)clearInterval(batchTimer);batchTimer=null}
+function resetBatch(){BQ=[];BR=[];BD=[];batchRunning=false;batchStopped=false;_bqId=0;_bqStt=0;_currentSessionId=null;_currentSessionName=null;if(batchTimer)clearInterval(batchTimer);batchTimer=null}
 
 function loadTxtFiles(fileList){
   if(!fileList||!fileList.length)return;
@@ -635,123 +677,194 @@ function loadTxtFiles(fileList){
     const r=new FileReader();
     r.onload=e=>{
       const lines=e.target.result.split('\n').map(l=>l.trim()).filter(l=>l&&!l.startsWith('#'));
-      lines.forEach(p=>BQ.push({id:++_bqId,prompt:p,status:'pending',url:null,error:null,retries:0,source:f.name}));
+      lines.forEach(p=>BQ.push({id:++_bqId,stt:++_bqStt,prompt:p,status:'pending',url:null,error:null,retries:0,source:f.name}));
+      if(_batchStore[CP])_batchStore[CP].stt=_bqStt;
       loaded++;
       if(loaded>=total){renderBatchUI();toast(BQ.filter(x=>x.status==='pending').length+' prompts đã tải','ok')}
     };
     r.readAsText(f);
   });
 }
-function loadFolderTxt(fileList){
-  const isImgType=CP==='image2video'||CP==='image2image';
-  if(isImgType){loadFolderPairs(fileList);return}
-  // Filter only .txt files from folder
-  const txtFiles=Array.from(fileList).filter(f=>f.name.endsWith('.txt'));
-  if(!txtFiles.length){toast('Folder không có file .txt','err');return}
-  // Derive folder name from webkitRelativePath
-  const first=txtFiles[0];
-  if(first.webkitRelativePath){
-    const parts=first.webkitRelativePath.split('/');
-    _currentSessionName='📁 '+parts[0]+' ('+txtFiles.length+' files)';
-  }else{
-    _currentSessionName='📁 Folder ('+txtFiles.length+' files)';
-  }
-  loadTxtFiles(txtFiles);
-}
-
 /* ── Natural sort helper ── */
 function natSort(a,b){return a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'})}
 
-/* ── Image pair mode: step 1 pick TXT, step 2 pick image folder ── */
+/* ── Image pair mode: popup with 2 drag-drop zones ── */
 let _pairTxtLines=null;
-function importPairMode(){
-  _pairTxtLines=null;
-  document.getElementById('btxt-inp').click();
+let _pairTxtFileName=null;
+let _pairImgFiles=null;
+
+function openPairModal(){
+  _pairTxtLines=null;_pairTxtFileName=null;_pairImgFiles=null;
+  const m=document.getElementById('lightbox');if(!m)return;
+  m.innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closePairModal()"><div class="glass-card modal" style="max-width:560px;padding:24px" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:600">📄+🖼 Import TXT + Ảnh</div>
+      <button onclick="closePairModal()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5">Kéo thả hoặc click để chọn. Mỗi dòng trong TXT = 1 prompt, ghép với ảnh theo thứ tự tên file.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div class="pair-drop-zone" id="pair-txt-zone" onclick="document.getElementById('pair-txt-inp').click()">
+        <input type="file" id="pair-txt-inp" accept=".txt" style="display:none" onchange="onPairTxtDrop(this.files)">
+        <div id="pair-txt-icon" style="font-size:28px;margin-bottom:6px">📄</div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px">File TXT</div>
+        <div id="pair-txt-status" style="font-size:11px;color:var(--text3)">Kéo thả hoặc click</div>
+      </div>
+      <div class="pair-drop-zone" id="pair-img-zone" onclick="document.getElementById('pair-img-inp').click()">
+        <input type="file" id="pair-img-inp" multiple accept="image/*" style="display:none" onchange="onPairImgDrop(this.files)">
+        <div id="pair-img-icon" style="font-size:28px;margin-bottom:6px">🖼</div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px">Folder Ảnh</div>
+        <div id="pair-img-status" style="font-size:11px;color:var(--text3)">Kéo thả hoặc click</div>
+      </div>
+    </div>
+    <div id="pair-preview" style="display:none;margin-bottom:14px;max-height:160px;overflow-y:auto;font-size:11px;background:rgba(255,255,255,.03);border-radius:8px;padding:8px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn-s" onclick="closePairModal()">Hủy</button>
+      <button class="btn-primary" id="pair-confirm-btn" onclick="confirmPairImport()" disabled style="padding:10px 20px;opacity:.5">Thêm vào hàng đợi</button>
+    </div>
+  </div></div>`;
+  // Setup drag-drop
+  _setupPairDragDrop('pair-txt-zone',['text/plain'],f=>onPairTxtDrop([f]));
+  _setupPairDragDrop('pair-img-zone',['image/'],f=>_collectPairImg(f));
 }
-function onPairTxtSelected(files){
+function closePairModal(){
+  const m=document.getElementById('lightbox');if(m)m.innerHTML='';
+  _pairTxtLines=null;_pairTxtFileName=null;_pairImgFiles=null;
+}
+function _setupPairDragDrop(zoneId,acceptTypes,onFile){
+  const zone=document.getElementById(zoneId);if(!zone)return;
+  zone.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();zone.classList.add('drag-over')});
+  zone.addEventListener('dragleave',e=>{e.preventDefault();e.stopPropagation();zone.classList.remove('drag-over')});
+  zone.addEventListener('drop',e=>{
+    e.preventDefault();e.stopPropagation();zone.classList.remove('drag-over');
+    const items=e.dataTransfer.items;
+    if(items&&items.length){
+      // Check for folder (webkitGetAsEntry)
+      const entries=[];
+      for(let i=0;i<items.length;i++){
+        const entry=items[i].webkitGetAsEntry&&items[i].webkitGetAsEntry();
+        if(entry)entries.push(entry);
+      }
+      const hasDir=entries.some(en=>en.isDirectory);
+      if(hasDir){
+        // Read all files from directory
+        _readEntriesRecursive(entries).then(files=>{
+          files.forEach(f=>onFile(f));
+          _updatePairUI();
+        });
+        return;
+      }
+    }
+    // Regular files
+    const files=e.dataTransfer.files;
+    if(files&&files.length){
+      for(let i=0;i<files.length;i++)onFile(files[i]);
+      _updatePairUI();
+    }
+  });
+}
+function _readEntriesRecursive(entries){
+  return new Promise(resolve=>{
+    const files=[];let pending=0;
+    function readEntry(entry){
+      if(entry.isFile){
+        pending++;
+        entry.file(f=>{files.push(f);pending--;if(!pending)resolve(files)});
+      }else if(entry.isDirectory){
+        pending++;
+        entry.createReader().readEntries(subEntries=>{
+          pending--;
+          subEntries.forEach(readEntry);
+          if(!pending)resolve(files);
+        });
+      }
+    }
+    entries.forEach(readEntry);
+    if(!pending)resolve(files);
+  });
+}
+function onPairTxtDrop(files){
   if(!files||!files.length)return;
-  const f=files[0];if(!f.name.endsWith('.txt')){toast('Chọn file .txt','err');return}
-  _currentSessionName=f.name+' (pairs)';
+  const f=Array.from(files).find(x=>x.name.endsWith('.txt'));
+  if(!f){toast('Chọn file .txt','err');return}
+  _pairTxtFileName=f.name;
   const r=new FileReader();
   r.onload=e=>{
     _pairTxtLines=e.target.result.split('\n').map(l=>l.trim()).filter(l=>l&&!l.startsWith('#'));
-    if(!_pairTxtLines.length){toast('File TXT trống','err');_pairTxtLines=null;return}
-    toast(`Đã đọc ${_pairTxtLines.length} dòng. Chọn folder ảnh...`,'info');
-    document.getElementById('bimg-inp').click();
+    const st=document.getElementById('pair-txt-status');
+    const ic=document.getElementById('pair-txt-icon');
+    if(st)st.innerHTML=`<span style="color:var(--ok)">✅ ${f.name} (${_pairTxtLines.length} dòng)</span>`;
+    if(ic)ic.textContent='✅';
+    document.getElementById('pair-txt-zone')?.classList.add('done');
+    _updatePairUI();
   };
   r.readAsText(f);
 }
-function onPairImgSelected(files){
-  if(!files||!files.length||!_pairTxtLines){toast('Chọn TXT trước','err');return}
-  const imgs=Array.from(files).filter(f=>f.type.startsWith('image/')).sort((a,b)=>natSort(a.name,b.name));
-  if(!imgs.length){toast('Folder không có ảnh','err');return}
-  const count=Math.min(_pairTxtLines.length,imgs.length);
+let _pairImgCollected=[];
+function _collectPairImg(f){
+  if(!f.type.startsWith('image/'))return;
+  _pairImgCollected.push(f);
+  const st=document.getElementById('pair-img-status');
+  if(st)st.innerHTML=`<span style="color:var(--ok)">✅ ${_pairImgCollected.length} ảnh</span>`;
+  document.getElementById('pair-img-icon').textContent='✅';
+  document.getElementById('pair-img-zone')?.classList.add('done');
+}
+function onPairImgDrop(files){
+  if(!files||!files.length)return;
+  _pairImgCollected=Array.from(files).filter(f=>f.type.startsWith('image/'));
+  if(!_pairImgCollected.length){toast('Không có ảnh','err');return}
+  const st=document.getElementById('pair-img-status');
+  if(st)st.innerHTML=`<span style="color:var(--ok)">✅ ${_pairImgCollected.length} ảnh</span>`;
+  document.getElementById('pair-img-icon').textContent='✅';
+  document.getElementById('pair-img-zone')?.classList.add('done');
+  _updatePairUI();
+}
+function _updatePairUI(){
+  const btn=document.getElementById('pair-confirm-btn');
+  const preview=document.getElementById('pair-preview');
+  const hasTxt=_pairTxtLines&&_pairTxtLines.length>0;
+  const hasImg=_pairImgCollected&&_pairImgCollected.length>0;
+  if(btn){btn.disabled=!(hasTxt&&hasImg);btn.style.opacity=hasTxt&&hasImg?'1':'.5'}
+  if(preview&&hasTxt&&hasImg){
+    const sorted=_pairImgCollected.sort((a,b)=>natSort(a.name,b.name));
+    const count=Math.min(_pairTxtLines.length,sorted.length);
+    let html=`<div style="font-weight:600;margin-bottom:6px;color:var(--text2)">Xem trước ghép (${count} cặp):</div>`;
+    for(let i=0;i<Math.min(count,10);i++){
+      html+=`<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span style="color:var(--accent);min-width:24px">${i+1}.</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(_pairTxtLines[i])}</span><span style="color:var(--text3);flex-shrink:0">→ ${sorted[i].name}</span></div>`;
+    }
+    if(count>10)html+=`<div style="color:var(--text3);padding-top:4px">... và ${count-10} cặp nữa</div>`;
+    if(_pairTxtLines.length!==sorted.length){
+      html+=`<div style="color:var(--warn);padding-top:6px">⚠ TXT: ${_pairTxtLines.length} dòng, Ảnh: ${sorted.length} file — sẽ ghép ${count} cặp</div>`;
+    }
+    preview.innerHTML=html;preview.style.display='block';
+  }
+}
+function confirmPairImport(){
+  if(!_pairTxtLines||!_pairImgCollected||!_pairImgCollected.length){toast('Chưa đủ dữ liệu','err');return}
+  const sorted=_pairImgCollected.sort((a,b)=>natSort(a.name,b.name));
+  const count=Math.min(_pairTxtLines.length,sorted.length);
+  _currentSessionName=(_pairTxtFileName||'pairs')+' (pairs)';
   for(let i=0;i<count;i++){
-    BQ.push({id:++_bqId,prompt:_pairTxtLines[i],status:'pending',url:null,error:null,retries:0,source:imgs[i].name,_imgFile:imgs[i]});
+    BQ.push({id:++_bqId,stt:++_bqStt,prompt:_pairTxtLines[i],status:'pending',url:null,error:null,retries:0,source:sorted[i].name,_imgFile:sorted[i]});
   }
-  if(_pairTxtLines.length!==imgs.length){
-    toast(`Ghép ${count} cặp (TXT: ${_pairTxtLines.length} dòng, Ảnh: ${imgs.length})`,'warn');
-  }else{
-    toast(`${count} cặp prompt+ảnh đã thêm`,'ok');
-  }
-  _pairTxtLines=null;
+  if(_batchStore[CP])_batchStore[CP].stt=_bqStt;
+  toast(`${count} cặp prompt+ảnh đã thêm vào hàng đợi`,'ok');
+  closePairModal();
   renderBatchUI();
 }
 
-/* ── Folder tổng: each subfolder has images + .txt with same name ── */
-function loadFolderPairs(fileList){
-  const allFiles=Array.from(fileList);
-  // Group by subfolder
-  const folders={};
-  allFiles.forEach(f=>{
-    const parts=f.webkitRelativePath.split('/');
-    if(parts.length<2)return;
-    const sub=parts.length>=3?parts[1]:'__root__';
-    if(!folders[sub])folders[sub]=[];
-    folders[sub].push(f);
-  });
-  // Set session name from root folder
-  const first=allFiles[0];
-  if(first&&first.webkitRelativePath){
-    const rootFolder=first.webkitRelativePath.split('/')[0];
-    _currentSessionName='📁 '+rootFolder+' (pairs)';
-  }
+/* ── Legacy pair functions (kept for backward compat) ── */
+function importPairMode(){openPairModal()}
+function onPairTxtSelected(files){onPairTxtDrop(files)}
+function onPairImgSelected(files){onPairImgDrop(files)}
 
-  let totalPairs=0;
-  const subNames=Object.keys(folders).sort(natSort);
-
-  subNames.forEach(sub=>{
-    const files=folders[sub];
-    const txts=files.filter(f=>f.name.endsWith('.txt'));
-    const imgs=files.filter(f=>f.type.startsWith('image/')).sort((a,b)=>natSort(a.name,b.name));
-    if(!txts.length||!imgs.length)return;
-
-    // Read first TXT
-    const txtFile=txts[0];
-    const reader=new FileReader();
-    reader.onload=e=>{
-      const lines=e.target.result.split('\n').map(l=>l.trim()).filter(l=>l&&!l.startsWith('#'));
-      const count=Math.min(lines.length,imgs.length);
-      for(let i=0;i<count;i++){
-        BQ.push({id:++_bqId,prompt:lines[i],status:'pending',url:null,error:null,retries:0,source:`${sub}/${imgs[i].name}`,_imgFile:imgs[i]});
-      }
-      totalPairs+=count;
-      renderBatchUI();
-    };
-    reader.readAsText(txtFile);
-  });
-
-  setTimeout(()=>{
-    if(totalPairs)toast(`${totalPairs} cặp từ ${subNames.length} subfolder`,'ok');
-    else toast('Không tìm thấy cặp TXT+ảnh trong folder','err');
-  },500);
-}
+/* ── loadFolderPairs removed — replaced by popup pair modal ── */
 function addFromPrompt(){
   const ta=document.getElementById('g-prompt');if(!ta)return;
   const text=ta.value.trim();if(!text){toast('Nhập prompt trước','err');return}
   const lines=text.split('\n').map(l=>l.trim()).filter(l=>l&&!l.startsWith('#'));
   if(!lines.length){toast('Không có prompt hợp lệ','err');return}
-  lines.forEach(p=>BQ.push({id:++_bqId,prompt:p,status:'pending',url:null,error:null,retries:0,source:'manual'}));
+  lines.forEach(p=>BQ.push({id:++_bqId,stt:++_bqStt,prompt:p,status:'pending',url:null,error:null,retries:0,source:'manual'}));
+  if(_batchStore[CP])_batchStore[CP].stt=_bqStt;
   ta.value='';
   renderBatchUI();toast(lines.length+' prompt đã thêm','ok');
 }
@@ -838,7 +951,6 @@ let _bPage={0:0,1:0,2:0};// current page per tab (0-indexed)
 // Admin pagination state
 let _auAll=[],_auPage=0;// admin users
 let _aaAll=[],_aaPage=0;// admin tokens
-let _ahAll=[],_ahPage=0;// admin history
 let _apAll=[],_apPage=0;// admin payments
 let _acAll=[],_acPage=0;// admin CTV
 let _amAll=[],_amPage=0;// admin commissions
@@ -874,7 +986,6 @@ function _histGoPage(page){_histPage=page;_renderHistPage()}
 function _btab2GoPage(page){_btab2Page=page;_renderBTab2Hist()}
 function _auGoPage(p){_auPage=p;_renderAdmUsersPage()}
 function _aaGoPage(p){_aaPage=p;_renderAdmTokensPage()}
-function _ahGoPage(p){_ahPage=p;_renderAdmHistPage()}
 function _apGoPage(p){_apPage=p;_renderAdmPayPage()}
 function _acGoPage(p){_acPage=p;_renderAdmCTVPage()}
 function _amGoPage(p){_amPage=p;_renderAdmCommsPage()}
@@ -886,68 +997,27 @@ function _accGoPage(p){_accPage=p;_renderAccPage()}
 function renderBTab0(items){
   const el=document.getElementById('btab0');if(!el)return;
   if(!items.length){el.innerHTML='<div class="bp-empty">Chưa có prompt. Nhập TXT hoặc thêm thủ công.</div>';return}
+  const sorted=[...items].sort((a,b)=>(a.stt||a.id)-(b.stt||b.id));
   const start=_bPage[0]*_BP;
-  const visible=items.slice(start,start+_BP);
-  el.innerHTML=visible.map((q,i)=>{
+  const visible=sorted.slice(start,start+_BP);
+  el.innerHTML=visible.map(q=>{
     const hasImg=!!q._imgFile;
-    return `<div class="bp-item"><span class="bp-num">${start+i+1}</span><span class="bp-text" title="${esc(q.prompt)}">${esc(q.prompt)}</span>${hasImg?`<span class="bp-src" title="${q.source}">🖼 ${q.source}</span>`:q.source!=='manual'?`<span class="bp-src">${q.source}</span>`:''}<button class="btn-icon" onclick="rmQItem(${q.id})" ${batchRunning?'disabled':''}>✕</button></div>`;
+    return `<div class="bp-item"><span class="bp-stt">#${q.stt||q.id}</span><span class="bp-text" title="${esc(q.prompt)}">${esc(q.prompt)}</span>${hasImg?`<span class="bp-src" title="${q.source}">🖼 ${q.source}</span>`:q.source!=='manual'?`<span class="bp-src">${q.source}</span>`:''}<button class="btn-icon" onclick="rmQItem(${q.id})" ${batchRunning?'disabled':''}>✕</button></div>`;
   }).join('')+_pgHtml(_bPage[0],items.length,'_bqGoPage');
 }
 function renderBTab1(items){
   const el=document.getElementById('btab1');if(!el)return;
   if(!items.length){el.innerHTML='<div class="bp-empty">Không có gì đang chạy</div>';return}
-  // Running items are usually few, show all
-  el.innerHTML=items.map(q=>`<div class="bp-item running"><span class="spin" style="flex-shrink:0"></span><span class="bp-text">${esc(q.prompt)}</span>${q._accLabel?`<span class="bp-acc" title="Account: ${esc(q._accLabel)}">${esc(q._accLabel)}</span>`:''}<span class="bp-rstatus">Đang tạo...</span></div>`).join('');
+  const sorted=[...items].sort((a,b)=>(a.stt||a.id)-(b.stt||b.id));
+  el.innerHTML=sorted.map(q=>`<div class="bp-item running"><span class="bp-stt">#${q.stt||q.id}</span><span class="spin" style="flex-shrink:0"></span><span class="bp-text">${esc(q.prompt)}</span>${q._accLabel?`<span class="bp-acc" title="Account: ${esc(q._accLabel)}">${esc(q._accLabel)}</span>`:''}<span class="bp-rstatus">Đang tạo...</span></div>`).join('');
 }
 // Smart render: during batch runs, only append NEW items to tab2 grid instead of full re-render
 let _tab2RenderedCount=0;
 function _smartRenderBTab2(done,failed){
   const all=[...done,...failed];
-  // If not on tab2, or no items, or first render, or page changed, or batch stopped — do full render
-  if(_batchTabIdx!==2||!all.length||_tab2RenderedCount===0||!batchRunning){
-    _tab2RenderedCount=all.length;
-    renderBTab2(done,failed);
-    return;
-  }
-  // If count hasn't changed, skip render entirely
-  if(all.length===_tab2RenderedCount)return;
-  // Count changed — only update counts in header (already done above) and append new items
-  // For simplicity on page 0 in grid mode, append new grid items
-  const el=document.getElementById('btab2');if(!el)return;
-  const isV=CP.includes('video');
-  const grid=el.querySelector('.bp-grid');
-  if(grid&&bViewMode==='grid'&&_bPage[2]===0){
-    const newItems=all.slice(_tab2RenderedCount);
-    newItems.forEach(q=>{
-      const isOk=q.status==='done';
-      const div=document.createElement('div');
-      if(isOk){
-        div.className='bp-gi';
-        const su=(q.url||'').replace(/'/g,"\\'");
-        const sp=esc(q.prompt).replace(/'/g,"\\'");
-        div.setAttribute('onclick',`openLightbox('${su}',${isV},'${sp}')`);
-        div.title=esc(q.prompt);
-        div.innerHTML=(q.url?(isV?`<video src="${q.url}#t=0.1" muted preload="metadata"></video>`:`<img src="${q.url}" loading="lazy">`):'<div class="bp-gi-ph">?</div>')+`<div class="bp-gi-ov">👁</div><div class="bp-gi-bar"><span class="bp-gi-p">${esc(q.prompt)}</span>${q.url?`<button class="btn-icon" onclick="event.stopPropagation();dlProxy('${su}','${isV?'video.mp4':'image.jpg'}')">⬇</button>`:''}</div>`;
-      }else{
-        div.className='bp-gi fail';
-        div.title=esc(q.error||'');
-        div.innerHTML=`<div class="bp-gi-err">✕</div><div class="bp-gi-bar"><span class="bp-gi-p">${esc(q.prompt)}</span></div>`;
-      }
-      grid.appendChild(div);
-    });
-    _tab2RenderedCount=all.length;
-    // Update pagination text if exists
-    const pgBar=el.querySelector('.pg-bar');
-    const totalPages=Math.ceil(all.length/_BP);
-    if(totalPages>1&&!pgBar){
-      // Need pagination now — do full re-render once
-      renderBTab2(done,failed);
-    }
-  }else{
-    // Table mode or not page 0 — full re-render
-    _tab2RenderedCount=all.length;
-    renderBTab2(done,failed);
-  }
+  // Always do full re-render for correctness (STT ordering + position keeping)
+  _tab2RenderedCount=all.length;
+  renderBTab2(done,failed);
 }
 // Selection state for batch tab2
 let _bt2Sel=new Set();
@@ -967,40 +1037,105 @@ function _bt2UpdateBar(){
 async function _bt2DlSelected(){
   const items=BQ.filter(x=>_bt2Sel.has(x.id)&&x.url);
   if(!items.length){toast('Không có file để tải','err');return}
-  if(items.length===1){dlProxy(items[0].url,CP.includes('video')?'video.mp4':'image.jpg');return}
+  // Sort by stt
+  items.sort((a,b)=>(a.stt||a.id)-(b.stt||b.id));
+  if(items.length===1){
+    const stt=items[0].stt||1;
+    const p=(items[0].prompt||'file').substring(0,60).replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g,'').trim().replace(/\s+/g,'_')||'file';
+    dlProxy(items[0].url,CP.includes('video')?`${stt}-${p}.mp4`:`${stt}-${p}.jpg`);
+    return;
+  }
   const isV=CP.includes('video');const ext=isV?'mp4':'jpg';
   toast('📦 Đang nén '+items.length+' files...','info');
   try{
     const zip=new JSZip();let added=0;
+    let promptsList='';
     for(let i=0;i<items.length;i++){
-      const fname=`${String(i+1).padStart(3,'0')}-${(items[i].prompt||'file').substring(0,40).replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g,'').trim().replace(/\s+/g,'_')||'file'}.${ext}`;
+      const stt=items[i].stt||i+1;
+      const promptClean=(items[i].prompt||'file').substring(0,60).replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g,'').trim().replace(/\s+/g,'_')||'file';
+      const fname=`${String(stt).padStart(3,'0')}-${promptClean}.${ext}`;
+      promptsList+=`${String(stt).padStart(3,'0')}: ${items[i].prompt||'(no prompt)'}\n`;
       try{const r=await fetch('/api/proxy-dl',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+API.token},body:JSON.stringify({url:items[i].url,filename:fname})});if(!r.ok)throw 0;const b=await r.blob();if(b.size>0){zip.file(fname,b);added++}}catch{try{const r2=await fetch(items[i].url);if(r2.ok){const b=await r2.blob();if(b.size>0){zip.file(fname,b);added++}}}catch{}}
     }
     if(!added){toast('Không tải được file nào','err');return}
+    zip.file('prompts.txt',promptsList);
     const blob=await zip.generateAsync({type:'blob'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`grok-selected-${added}files.zip`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);
-    toast(`✅ Đã tải ZIP (${added} files)`,'ok');
+    toast(`✅ Đã tải ZIP (${added} files + prompts.txt)`,'ok');
   }catch(e){toast('Lỗi nén: '+e.message,'err')}
 }
 async function _bt2DlAll(){
   const items=BQ.filter(x=>x.status==='done'&&x.url);
   if(!items.length){toast('Không có file hoàn thành','err');return}
-  if(items.length===1){dlProxy(items[0].url,CP.includes('video')?'video.mp4':'image.jpg');return}
+  // Sort by stt to maintain original order
+  items.sort((a,b)=>(a.stt||a.id)-(b.stt||b.id));
+  if(items.length===1){
+    const stt=items[0].stt||1;
+    const p=(items[0].prompt||'file').substring(0,60).replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g,'').trim().replace(/\s+/g,'_')||'file';
+    dlProxy(items[0].url,CP.includes('video')?`${stt}-${p}.mp4`:`${stt}-${p}.jpg`);
+    return;
+  }
   const isV=CP.includes('video');const ext=isV?'mp4':'jpg';
   toast('📦 Đang nén tất cả '+items.length+' files...','info');
   try{
     const zip=new JSZip();let added=0;
+    let promptsList='';
     for(let i=0;i<items.length;i++){
-      const fname=`${String(i+1).padStart(3,'0')}-${(items[i].prompt||'file').substring(0,40).replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g,'').trim().replace(/\s+/g,'_')||'file'}.${ext}`;
+      const stt=items[i].stt||i+1;
+      const promptClean=(items[i].prompt||'file').substring(0,60).replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g,'').trim().replace(/\s+/g,'_')||'file';
+      const fname=`${String(stt).padStart(3,'0')}-${promptClean}.${ext}`;
+      promptsList+=`${String(stt).padStart(3,'0')}: ${items[i].prompt||'(no prompt)'}\n`;
       try{const r=await fetch('/api/proxy-dl',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+API.token},body:JSON.stringify({url:items[i].url,filename:fname})});if(!r.ok)throw 0;const b=await r.blob();if(b.size>0){zip.file(fname,b);added++}}catch{try{const r2=await fetch(items[i].url);if(r2.ok){const b=await r2.blob();if(b.size>0){zip.file(fname,b);added++}}}catch{}}
     }
     if(!added){toast('Không tải được file nào','err');return}
+    zip.file('prompts.txt',promptsList);
     const blob=await zip.generateAsync({type:'blob'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`grok-all-${added}files.zip`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);
-    toast(`✅ Đã tải ZIP (${added} files)`,'ok');
+    toast(`✅ Đã tải ZIP (${added} files + prompts.txt)`,'ok');
+  }catch(e){toast('Lỗi nén: '+e.message,'err')}
+}
+async function _bt2DlByFolder(){
+  const items=BQ.filter(x=>x.status==='done'&&x.url);
+  if(!items.length){toast('Không có file hoàn thành','err');return}
+  const groups={};
+  items.forEach(item=>{
+    const src=item.source||'unknown';
+    if(!groups[src])groups[src]=[];
+    groups[src].push(item);
+  });
+  const folderNames=Object.keys(groups);
+  if(folderNames.length<=1){
+    toast('Chỉ có 1 nguồn file, dùng "Tải tất cả" thay thế','warn');
+    return _bt2DlAll();
+  }
+  const isV=CP.includes('video');const ext=isV?'mp4':'jpg';
+  toast(`📁 Đang nén ${items.length} files vào ${folderNames.length} folders...`,'info');
+  try{
+    const zip=new JSZip();let added=0;
+    for(const src of folderNames){
+      const folderItems=groups[src].sort((a,b)=>(a.stt||a.id)-(b.stt||b.id));
+      const folderName=src.replace(/\.txt$/i,'').replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF_\- ]/g,'').trim()||'folder';
+      const folder=zip.folder(folderName);
+      let promptsList='';
+      for(let i=0;i<folderItems.length;i++){
+        const item=folderItems[i];
+        const stt=item.stt||i+1;
+        const promptClean=(item.prompt||'file').substring(0,60).replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g,'').trim().replace(/\s+/g,'_')||'file';
+        const fname=`${String(stt).padStart(3,'0')}-${promptClean}.${ext}`;
+        promptsList+=`${String(stt).padStart(3,'0')}: ${item.prompt||'(no prompt)'}\n`;
+        try{const r=await fetch('/api/proxy-dl',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+API.token},body:JSON.stringify({url:item.url,filename:fname})});if(!r.ok)throw 0;const b=await r.blob();if(b.size>0){folder.file(fname,b);added++}}catch{try{const r2=await fetch(item.url);if(r2.ok){const b=await r2.blob();if(b.size>0){folder.file(fname,b);added++}}}catch{}}
+      }
+      folder.file('prompts.txt',promptsList);
+    }
+    if(!added){toast('Không tải được file nào','err');return}
+    const blob=await zip.generateAsync({type:'blob'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`grok-${folderNames.length}folders-${added}files.zip`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);
+    toast(`✅ Đã tải ZIP (${folderNames.length} folders, ${added} files)`,'ok');
   }catch(e){toast('Lỗi nén: '+e.message,'err')}
 }
 function renderBTab2(done,failed){
   const el=document.getElementById('btab2');if(!el)return;
+  // Merge done+failed, sort by stt (original order), keep positions fixed
   const all=[...done.map(x=>({...x,_ok:true})),...failed.map(x=>({...x,_ok:false}))];
+  all.sort((a,b)=>(a.stt||a.id)-(b.stt||b.id));
   if(!all.length){
     _bt2Sel.clear();
     el.innerHTML='<div class="bp-empty">Chưa có kết quả. Kết quả sẽ hiển thị khi batch chạy xong.</div>';
@@ -1017,6 +1152,7 @@ function renderBTab2(done,failed){
       <button class="btn-s" onclick="_bt2DlSelected()" style="padding:4px 10px;font-size:11px">⬇ Tải đã chọn</button>
     </div>
     <span style="flex:1"></span>
+    <button class="btn-s" onclick="_bt2DlByFolder()" style="padding:4px 10px;font-size:11px" title="Tải ZIP với subfolder theo từng file TXT nguồn">📁 Tải theo folder</button>
     <button class="btn-s" onclick="_bt2DlAll()" style="padding:4px 10px;font-size:11px">📦 Tải tất cả</button>
   </div>`:'';
   const start=_bPage[2]*_BP;
@@ -1025,25 +1161,28 @@ function renderBTab2(done,failed){
   const pg=_pgHtml(_bPage[2],all.length,'_bdGoPage');
   if(bViewMode==='grid'){
     el.innerHTML=toolbar+'<div class="bp-grid">'+visible.map(q=>{
+      const sttLabel=`<div class="bp-gi-stt">#${q.stt||q.id}</div>`;
       if(q._ok){
         const su=(q.url||'').replace(/'/g,"\\'");
         const sp=esc(q.prompt).replace(/'/g,"\\'");
         const sel=_bt2Sel.has(q.id);
         const chk=q.url?`<label class="bp-gi-chk" onclick="event.stopPropagation()"><input type="checkbox" ${sel?'checked':''} onchange="_bt2Toggle(${q.id})"></label>`:'';
-        return `<div class="bp-gi${sel?' bp-gi-sel':''}" onclick="openLightbox('${su}',${isV},'${sp}')" title="${esc(q.prompt)}">${chk}${q.url?(isV?`<video src="${q.url}#t=0.1" muted preload="metadata"></video>`:`<img src="${q.url}" loading="lazy">`):'<div class="bp-gi-ph">?</div>'}<div class="bp-gi-ov">👁</div><div class="bp-gi-bar"><span class="bp-gi-p">${esc(q.prompt)}</span>${q.url?`<button class="btn-icon" onclick="event.stopPropagation();dlProxy('${su}','${isV?'video.mp4':'image.jpg'}')">⬇</button>`:''}</div></div>`;
+        return `<div class="bp-gi${sel?' bp-gi-sel':''}" onclick="openLightbox('${su}',${isV},'${sp}')" title="${esc(q.prompt)}">${sttLabel}${chk}${q.url?(isV?`<video src="${q.url}#t=0.1" muted preload="metadata"></video>`:`<img src="${q.url}" loading="lazy">`):'<div class="bp-gi-ph">?</div>'}<div class="bp-gi-ov">👁</div><div class="bp-gi-bar"><span class="bp-gi-p">${esc(q.prompt)}</span>${q.url?`<button class="btn-icon" onclick="event.stopPropagation();dlProxy('${su}','${isV?`${q.stt||q.id}-video.mp4`:`${q.stt||q.id}-image.jpg`}')">⬇</button>`:''}</div></div>`;
       }else{
-        return `<div class="bp-gi fail" title="${esc(q.error||'')}"><div class="bp-gi-err">✕</div><div class="bp-gi-bar"><span class="bp-gi-p">${esc(q.prompt)}</span></div></div>`;
+        // Failed: show empty placeholder at correct position
+        return `<div class="bp-gi fail" title="${esc(q.error||'')}">${sttLabel}<div class="bp-gi-err">✕</div><div class="bp-gi-bar"><span class="bp-gi-p">${esc(q.prompt)}</span></div></div>`;
       }
     }).join('')+'</div>'+pg;
   }else{
-    el.innerHTML=toolbar+`<table class="bp-tbl"><thead><tr><th style="width:30px"><input type="checkbox" ${isAllSel?'checked':''} onchange="_bt2SelectAll()"></th><th>#</th><th>Prompt</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>${visible.map((q,i)=>{
+    el.innerHTML=toolbar+`<table class="bp-tbl"><thead><tr><th style="width:30px"><input type="checkbox" ${isAllSel?'checked':''} onchange="_bt2SelectAll()"></th><th style="width:40px">STT</th><th>Prompt</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>${visible.map(q=>{
       if(q._ok){
         const su=(q.url||'').replace(/'/g,"\\'");
         const sp=esc(q.prompt).replace(/'/g,"\\'");
         const sel=_bt2Sel.has(q.id);
-        return `<tr class="bp-tr-ok${sel?' bp-tr-sel':''}"><td><input type="checkbox" ${sel?'checked':''} ${q.url?`onchange="_bt2Toggle(${q.id})"`:' disabled'}></td><td class="bp-tc">${start+i+1}</td><td class="bp-tp" title="${esc(q.prompt)}">${esc(q.prompt)}</td><td><span style="color:var(--ok)">✓ Xong</span></td><td class="bp-ta">${q.url?`<button class="btn-icon" onclick="openLightbox('${su}',${isV},'${sp}')" title="Xem">👁</button><button class="btn-icon" onclick="dlProxy('${su}','${isV?'video.mp4':'image.jpg'}')" title="Tải">⬇</button><button class="btn-icon" onclick="window.open('${su}','_blank')" title="Mở">↗</button>`:''}</td></tr>`;
+        return `<tr class="bp-tr-ok${sel?' bp-tr-sel':''}"><td><input type="checkbox" ${sel?'checked':''} ${q.url?`onchange="_bt2Toggle(${q.id})"`:' disabled'}></td><td class="bp-tc bp-stt-cell">#${q.stt||q.id}</td><td class="bp-tp" title="${esc(q.prompt)}">${esc(q.prompt)}</td><td><span style="color:var(--ok)">✓ Xong</span></td><td class="bp-ta">${q.url?`<button class="btn-icon" onclick="openLightbox('${su}',${isV},'${sp}')" title="Xem">👁</button><button class="btn-icon" onclick="dlProxy('${su}','${isV?`${q.stt||q.id}-video.mp4`:`${q.stt||q.id}-image.jpg`}')" title="Tải">⬇</button><button class="btn-icon" onclick="window.open('${su}','_blank')" title="Mở">↗</button>`:''}</td></tr>`;
       }else{
-        return `<tr class="bp-tr-fail"><td></td><td class="bp-tc">${start+i+1}</td><td class="bp-tp" title="${esc(q.prompt)}">${esc(q.prompt)}</td><td><span style="color:var(--err)">✕ Lỗi</span></td><td class="bp-ta"><span class="bp-terr" title="${esc(q.error||'')}">${(q.error||'Lỗi').substring(0,25)}</span></td></tr>`;
+        // Failed row: keep position, show empty/error
+        return `<tr class="bp-tr-fail"><td></td><td class="bp-tc bp-stt-cell">#${q.stt||q.id}</td><td class="bp-tp" title="${esc(q.prompt)}">${esc(q.prompt)}</td><td><span style="color:var(--err)">✕ Lỗi</span></td><td class="bp-ta"><span class="bp-terr" title="${esc(q.error||'')}">${(q.error||'Lỗi').substring(0,25)}</span></td></tr>`;
       }
     }).join('')}</tbody></table>`+pg;
   }
@@ -1319,6 +1458,11 @@ async function _worker(acc,type,maxRetries,batchPage){
       const isCooling=emsg.includes('cooling')||emsg.includes('No available token')||emsg.includes('token_cooling')||emsg.includes('đều đã bị');
       const isQuota=emsg.includes('quota')||emsg.includes('No credits')||emsg.includes('Too many');
       const isAllLimited=emsg.includes('Tất cả token')||emsg.includes('all_limited')||isCooling;
+      // Server errors 502/503 — treat as token limit after retries
+      const isServerErr=emsg.includes('SERVER_ERROR')||emsg.includes('server_error')||emsg.includes('lỗi tạm thời')||emsg.includes('502')||emsg.includes('503')||emsg.includes('520')||emsg.includes('Media post')||emsg.includes('generation blocked');
+      // Tunnel / network error
+      const isTunnel=emsg.includes('tunnel')||emsg.includes('unreachable')||emsg.includes('Không kết nối')||emsg.includes('TUNNEL_ERROR')||emsg.includes('Grok2API offline');
+      
       if(isRateLimit||isCooling||isQuota){
         _exhaustedAccs.add(acc.id);
         item.status='pending';item._accLabel=null;item._accId=null;
@@ -1342,22 +1486,19 @@ async function _worker(acc,type,maxRetries,batchPage){
         _safeRenderBatch(batchPage);
         return;
       }
-      // Tunnel / network error — DON'T stop batch immediately, retry first
-      // IMPORTANT: this must NOT match rate limit messages (which may contain "502")
-      const isTunnel=emsg.includes('tunnel')||emsg.includes('unreachable')||emsg.includes('Không kết nối')||emsg.includes('TUNNEL_ERROR')||emsg.includes('Grok2API offline');
-      // Server-side transient errors (Grok 520/502/503) — NOT tunnel down, just Grok hiccup
-      const isServerErr=!isTunnel&&(emsg.includes('SERVER_ERROR')||emsg.includes('server_error')||emsg.includes('lỗi tạm thời')||emsg.includes('Media post')||emsg.includes('520')||emsg.includes('generation blocked'));
-      if(isServerErr){
-        if(item.retries<maxRetries+3){
+      // Server errors (502/503/520) — retry with increasing delay, then mark as token limit
+      if(isServerErr&&!isTunnel){
+        if(item.retries<maxRetries+2){
           item.retries++;item.status='pending';item._accLabel=null;item._accId=null;
           _safeRenderBatch(batchPage);
-          const delay=3000+item.retries*2000;// increasing delay: 5s, 7s, 9s...
+          const delay=5000+item.retries*3000;// increasing delay: 8s, 11s, 14s...
           await new Promise(r=>setTimeout(r,delay));
           continue;
         }
-        item.status='failed';item.error='Grok server lỗi (sau '+item.retries+' lần thử)';
+        // After retries exhausted, treat as token limit (user-friendly message)
+        item.status='failed';item.error='⛔ Token bị giới hạn tạm thời. Vui lòng đợi 1-2h hoặc thử token khác.';
         _safeRenderBatch(batchPage);
-        await new Promise(r=>setTimeout(r,2000));
+        await new Promise(r=>setTimeout(r,3000));
         continue;
       }
       if(isTunnel){
@@ -1366,11 +1507,11 @@ async function _worker(acc,type,maxRetries,batchPage){
           item.retries++;item.status='pending';item._accLabel=null;item._accId=null;
           _safeRenderBatch(batchPage);
           toast(`⚠️ Grok2API lỗi tạm thời, thử lại lần ${item.retries}...`,'warn');
-          await new Promise(r=>setTimeout(r,5000));// wait 5s before retry
+          await new Promise(r=>setTimeout(r,6000));// wait 6s before retry
           continue;
         }
-        // After all retries exhausted for this item, fail it but DON'T stop batch
-        item.status='failed';item.error='Grok2API offline (sau '+item.retries+' lần thử)';
+        // After all retries exhausted for this item, show as token limit
+        item.status='failed';item.error='⛔ Token bị giới hạn tạm thời. Vui lòng đợi 1-2h hoặc thử token khác.';
         // Track consecutive tunnel failures across all workers
         if(!store._tunnelFails)store._tunnelFails=0;
         store._tunnelFails++;
@@ -1378,24 +1519,27 @@ async function _worker(acc,type,maxRetries,batchPage){
         // Only stop batch if 5+ consecutive tunnel failures (real outage)
         if(store._tunnelFails>=5){
           store.stopped=true;
-          toast('🔌 Grok2API liên tục lỗi ('+store._tunnelFails+' lần). Batch dừng.','err');
+          _showLimitBanner('Tất cả token đang bị giới hạn. Vui lòng đợi 1-2h để token tự mở khóa.','err');
+          toast('⛔ Token bị giới hạn. Batch dừng.','err');
           return;
         }
-        toast('⚠️ 1 prompt lỗi kết nối, tiếp tục batch...','warn');
-        await new Promise(r=>setTimeout(r,2000));
-        continue;
-      }
-      // Retry logic
-      if(item.retries<maxRetries){
-        item.retries++;item.status='pending';item._accLabel=null;item._accId=null;
-        _safeRenderBatch(batchPage);
         await new Promise(r=>setTimeout(r,3000));
         continue;
       }
-      item.status='failed';item.error=emsg;
+      // Other errors — retry logic
+      if(item.retries<maxRetries){
+        item.retries++;item.status='pending';item._accLabel=null;item._accId=null;
+        _safeRenderBatch(batchPage);
+        await new Promise(r=>setTimeout(r,4000));
+        continue;
+      }
+      // Final failure — show user-friendly message
+      item.status='failed';
+      item.error=emsg.includes('Lỗi')||emsg.includes('lỗi')?emsg:'⛔ Token bị giới hạn tạm thời. Vui lòng đợi 1-2h.';
     }
     _safeRenderBatch(batchPage);
-    if(!store.stopped)await new Promise(r=>setTimeout(r,800));
+    // Delay between requests to avoid overwhelming server (3-5 seconds)
+    if(!store.stopped)await new Promise(r=>setTimeout(r,3000+Math.random()*2000));
   }
 }
 
@@ -1495,12 +1639,20 @@ async function startBatch(){
     renderBatchUI();
   }
   _updateNavBatchIndicators();
-  const done=store.BQ.filter(x=>x.status==='done').length,fail=store.BQ.filter(x=>x.status==='failed').length;
-  toast(`Batch xong: ${done} thành công, ${fail} lỗi`,fail?'warn':'ok');
-  if(done>0){
+  // Calculate final counts from store (not globals which may be stale)
+  const finalDone=store.BQ.filter(x=>x.status==='done').length;
+  const finalFail=store.BQ.filter(x=>x.status==='failed').length;
+  const finalPending=store.BQ.filter(x=>x.status==='pending').length;
+  // Show appropriate message
+  if(finalFail>0&&finalDone===0){
+    toast(`⛔ Batch thất bại: Tất cả ${finalFail} prompt đều lỗi. Token có thể bị giới hạn.`,'err');
+  }else{
+    toast(`Batch xong: ${finalDone} thành công, ${finalFail} lỗi`,finalFail?'warn':'ok');
+  }
+  if(finalDone>0){
     _autoDlPending=true;
-    _autoDlCount=done;
-    const batchCount=done;
+    _autoDlCount=finalDone;
+    const batchCount=finalDone;
     setTimeout(()=>toast('⏳ Đang chờ server xử lý xong, sẽ tự tải ZIP...','info'),2000);
     // Check if any items still processing on server; if not, download immediately
     setTimeout(async()=>{
@@ -1533,8 +1685,11 @@ async function autoDlFromHistory(type,count){
     const ext=isV?'mp4':'jpg';
     const zip=new JSZip();
     let added=0;
+    let promptsList='';
     for(let i=0;i<items.length;i++){
-      const fname=`${String(i+1).padStart(3,'0')}-${(items[i].prompt||'file').substring(0,40).replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g,'').trim().replace(/\s+/g,'_')||'file'}.${ext}`;
+      const promptClean=(items[i].prompt||'file').substring(0,60).replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g,'').trim().replace(/\s+/g,'_')||'file';
+      const fname=`${String(i+1).padStart(3,'0')}-${promptClean}.${ext}`;
+      promptsList+=`${String(i+1).padStart(3,'0')}: ${items[i].prompt||'(no prompt)'}\n`;
       try{
         const r=await fetch('/api/proxy-dl',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+API.token},body:JSON.stringify({url:items[i].output_url,filename:fname})});
         if(!r.ok)throw new Error();
@@ -1545,13 +1700,14 @@ async function autoDlFromHistory(type,count){
       }
     }
     if(!added){toast('Không tải được file nào','err');return}
+    zip.file('prompts.txt',promptsList);
     const content=await zip.generateAsync({type:'blob'});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(content);
     a.download=`grok-batch-${added}files.zip`;
     document.body.appendChild(a);a.click();document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
-    toast(`✅ Đã tải ZIP (${added} files)`,'ok');
+    toast(`✅ Đã tải ZIP (${added} files + prompts.txt)`,'ok');
   }catch(e){toast('Lỗi nén ZIP: '+e.message,'err')}
 }
 function retryFailed(){
@@ -2537,21 +2693,44 @@ function showTokenPopup(idx){
 }
 
 /* ========== ADMIN HISTORY ========== */
-async function loadAdmHist(){
-  const t=document.getElementById('aht')?.value||'',s=document.getElementById('ahs')?.value||'';
-  const q=new URLSearchParams();if(t)q.set('type',t);if(s)q.set('status',s);q.set('limit','500');
+let _ahTotal=0,_ahPage=0,_ahLimit=50,_ahType='',_ahStatus='';
+async function loadAdmHist(page){
+  if(page!==undefined)_ahPage=page;
+  _ahType=document.getElementById('aht')?.value||'';
+  _ahStatus=document.getElementById('ahs')?.value||'';
+  const q=new URLSearchParams();
+  if(_ahType)q.set('type',_ahType);
+  if(_ahStatus)q.set('status',_ahStatus);
+  q.set('limit',String(_ahLimit));
+  q.set('offset',String(_ahPage*_ahLimit));
   const body=document.getElementById('ahbody');if(!body)return;
-  try{const{history}=await API.adm.history(q.toString());
-    _ahAll=history||[];_ahPage=0;_renderAdmHistPage();
+  body.innerHTML='<tr><td colspan="7" style="text-align:center"><div class="spin-lg"></div></td></tr>';
+  try{
+    const{history,total}=await API.adm.history(q.toString());
+    _ahTotal=total||0;
+    if(!history||!history.length){body.innerHTML='<tr><td colspan="7" class="muted">Không có</td></tr>';}
+    else{
+      body.innerHTML=history.map(h=>{
+        const tl={text2video:'T→V',image2video:'I→V',text2image:'T→I',image2image:'I→I',extend_video:'Ext'}[h.type]||h.type;
+        const ps=(h.prompt||'').substring(0,60)+((h.prompt||'').length>60?'...':'');
+        const has=h.output_url&&(h.output_url.startsWith('http')||h.output_url.startsWith('/'));
+        return `<tr><td>${h.id}</td><td class="sm">${h.user_email}</td><td><span class="badge">${tl}</span></td><td class="sm prompt-cell" title="${(h.prompt||'').replace(/"/g,'&quot;')}">${ps}</td><td><span class="sdot ${h.status}"></span>${h.status}</td><td class="sm">${new Date(h.created_at).toLocaleString()}</td><td>${has?`<a href="${h.output_url}" target="_blank" class="sm">Xem</a>`:'-'}</td></tr>`;
+      }).join('');
+    }
+    // Server-side pagination controls
+    const wrap=body.closest('.tbl-wrap');
+    if(wrap){
+      let pgDiv=wrap.nextElementSibling;
+      if(!pgDiv||!pgDiv.classList.contains('ah-pg')){pgDiv=document.createElement('div');pgDiv.className='ah-pg';wrap.after(pgDiv);}
+      const totalPages=Math.ceil(_ahTotal/_ahLimit)||1;
+      const from=_ahPage*_ahLimit+1,to=Math.min((_ahPage+1)*_ahLimit,_ahTotal);
+      let btns='';
+      if(_ahPage>0)btns+=`<button class="btn-s" onclick="loadAdmHist(0)">«</button><button class="btn-s" onclick="loadAdmHist(${_ahPage-1})">‹</button>`;
+      btns+=`<span style="font-size:12px;color:var(--text2);padding:0 8px">${from}-${to} / ${_ahTotal}</span>`;
+      if(_ahPage<totalPages-1)btns+=`<button class="btn-s" onclick="loadAdmHist(${_ahPage+1})">›</button><button class="btn-s" onclick="loadAdmHist(${totalPages-1})">»</button>`;
+      pgDiv.innerHTML=`<div style="display:flex;align-items:center;gap:4px;padding:8px 0">${btns}</div>`;
+    }
   }catch(e){body.innerHTML=`<tr><td colspan="7" class="err">${e.message}</td></tr>`}
-}
-function _renderAdmHistPage(){
-  const body=document.getElementById('ahbody');if(!body)return;
-  if(!_ahAll.length){body.innerHTML='<tr><td colspan="7" class="muted">Không có</td></tr>';return}
-  const start=_ahPage*_BP;const visible=_ahAll.slice(start,start+_BP);
-  body.innerHTML=visible.map(h=>{const tl={text2video:'T→V',image2video:'I→V',text2image:'T→I',image2image:'I→I',extend_video:'Ext'}[h.type]||h.type;const ps=(h.prompt||'').substring(0,60)+((h.prompt||'').length>60?'...':'');const has=h.output_url&&h.output_url.startsWith('http');
-    return `<tr><td>${h.id}</td><td class="sm">${h.user_email}</td><td><span class="badge">${tl}</span></td><td class="sm prompt-cell" title="${(h.prompt||'').replace(/"/g,'&quot;')}">${ps}</td><td><span class="sdot ${h.status}"></span>${h.status}</td><td class="sm">${new Date(h.created_at).toLocaleString()}</td><td>${has?`<a href="${h.output_url}" target="_blank" class="sm">Xem</a>`:'-'}</td></tr>`}).join('');
-  const pg=body.closest('.tbl-wrap');if(pg){let pgDiv=pg.nextElementSibling;if(!pgDiv||!pgDiv.classList.contains('ah-pg')){pgDiv=document.createElement('div');pgDiv.className='ah-pg';pg.after(pgDiv)}pgDiv.innerHTML=_pgHtml(_ahPage,_ahAll.length,'_ahGoPage')}
 }
 
 /* ========== ADMIN PLANS ========== */
@@ -2798,7 +2977,7 @@ function renderAdmComms(){return `<div class="page-title">Lịch sử Hoa hồng
 <div class="adm-toolbar">
   <select id="cm-status" onchange="loadAdmComms()"><option value="">Tất cả</option><option value="pending">Chờ TT</option><option value="paid">Đã TT</option></select>
   <button class="btn-s" onclick="go('admin-ctv')">← Quay lại CTV</button>
-  <button class="btn-s" onclick="go('admin-redemptions')">🎁 Yêu cầu đổi thưởng</button>
+  <button class="btn-s" onclick="go('admin-redemptions')">💰 Yêu cầu rút tiền</button>
 </div>
 <div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>CTV</th><th>Người mua</th><th>Đơn hàng</th><th>Giá trị</th><th>Hoa hồng</th><th>%</th><th>Trạng thái</th><th>Ngày</th><th>Thao tác</th></tr></thead><tbody id="cm-body"><tr><td colspan="10"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
 
@@ -2932,12 +3111,12 @@ function _renderBankTx(items){
 }
 
 /* ========== ADMIN REDEMPTIONS — SUPERADMIN ========== */
-function renderAdmRedemptions(){return `<div class="page-title">🎁 Yêu cầu đổi thưởng</div><div class="page-sub">Duyệt yêu cầu đổi ngày / rút tiền của CTV</div>
+function renderAdmRedemptions(){return `<div class="page-title">💰 Yêu cầu rút tiền</div><div class="page-sub">Duyệt yêu cầu rút tiền của CTV</div>
 <div class="adm-toolbar">
   <select id="rd-status" onchange="loadAdmRedemptions()"><option value="">Tất cả</option><option value="pending">Chờ duyệt</option><option value="approved">Đã duyệt</option><option value="rejected">Từ chối</option></select>
   <button class="btn-s" onclick="go('admin-comms')">← Hoa hồng</button>
 </div>
-<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>CTV</th><th>Loại</th><th>Số tiền</th><th>Ngày thêm</th><th>Trạng thái</th><th>Ngày tạo</th><th>Ghi chú</th><th>Thao tác</th></tr></thead><tbody id="rd-body"><tr><td colspan="9"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
+<div class="glass-card tbl-wrap" style="margin-top:12px"><table class="adm-tbl"><thead><tr><th>ID</th><th>CTV</th><th>Số tiền</th><th>Trạng thái</th><th>Ngày tạo</th><th>Ghi chú</th><th>Thao tác</th></tr></thead><tbody id="rd-body"><tr><td colspan="7"><div class="spin-lg"></div></td></tr></tbody></table></div>`}
 
 async function loadAdmRedemptions(){
   try{
@@ -2949,14 +3128,13 @@ async function loadAdmRedemptions(){
 }
 function _renderAdmRedemptionsPage(){
   const tb=document.getElementById('rd-body');if(!tb)return;
-  if(!_arAll.length){tb.innerHTML='<tr><td colspan="9" class="muted">Chưa có yêu cầu</td></tr>';return}
+  if(!_arAll.length){tb.innerHTML='<tr><td colspan="7" class="muted">Chưa có yêu cầu</td></tr>';return}
   const start=_arPage*_BP;const visible=_arAll.slice(start,start+_BP);
   tb.innerHTML=visible.map(r=>{
-      const typeBadge=r.type==='days'?'📅 Ngày':'💰 Tiền';
       const stCls=r.status==='approved'?'color:var(--ok)':r.status==='rejected'?'color:var(--err)':'color:var(--warn)';
-      const stTxt=r.status==='approved'?'✓ Duyệt':r.status==='rejected'?'✕ Từ chối':'⏳ Chờ';
+      const stTxt=r.status==='approved'?'✓ Đã duyệt':r.status==='rejected'?'✕ Từ chối':'⏳ Chờ duyệt';
       const acts=r.status==='pending'?`<button class="btn-s" onclick="approveRedemption(${r.id})" style="color:var(--ok)">✓ Duyệt</button><button class="btn-s danger" onclick="rejectRedemption(${r.id})">✕ Từ chối</button>`:'';
-      return `<tr><td>${r.id}</td><td class="sm">${r.affiliate_email||''}</td><td>${typeBadge}</td><td style="font-weight:600">${fmtVND(r.points_used)}</td><td>${r.days_added?r.days_added+' ngày':'-'}</td><td style="${stCls}">${stTxt}</td><td class="sm">${r.created_at?r.created_at.slice(0,10):'-'}</td><td class="sm">${r.note||''}</td><td class="acts">${acts}</td></tr>`}).join('');
+      return `<tr><td>${r.id}</td><td class="sm">${r.affiliate_email||''}</td><td style="font-weight:600">${fmtVND(r.points_used)}</td><td style="${stCls}">${stTxt}</td><td class="sm">${r.created_at?r.created_at.slice(0,10):'-'}</td><td class="sm">${r.note||''}</td><td class="acts">${acts}</td></tr>`}).join('');
   const pg=tb.closest('.tbl-wrap');if(pg){let pgDiv=pg.nextElementSibling;if(!pgDiv||!pgDiv.classList.contains('ar-pg')){pgDiv=document.createElement('div');pgDiv.className='ar-pg';pg.after(pgDiv)}pgDiv.innerHTML=_pgHtml(_arPage,_arAll.length,'_arGoPage')}
 }
 
@@ -3080,48 +3258,31 @@ async function _renderAffDashboard(el){
         <div>Tỷ lệ hoa hồng: <span style="color:var(--ok);font-weight:600">${d.commission_rate}%</span></div>
         <div style="margin-top:8px;color:var(--text3)">Chia sẻ link này cho bạn bè. Khi họ đăng ký và mua gói, bạn nhận ${d.commission_rate}% hoa hồng.</div>
       </div>`;
-    // Redeem card
+    // Redeem card - chỉ rút tiền, không đổi ngày
     const rc=document.getElementById('aff-redeem-card');
-    const ppd=s.pointsPerDay;
-    const maxDays=Math.floor(s.availableBalance/ppd);
     if(rc)rc.innerHTML=`
-      <div class="prof-section-title">🎁 Đổi thưởng</div>
+      <div class="prof-section-title">💰 Rút tiền</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">
-        Số dư: <span style="color:var(--warn);font-weight:600">${fmtVND(s.availableBalance)}</span><br>
-        Quy đổi: ${fmtVND(ppd)}/ngày (tối đa ${maxDays} ngày)
+        Số dư khả dụng: <span style="color:var(--warn);font-weight:600">${fmtVND(s.availableBalance)}</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:12px">
-        <div style="background:var(--card);padding:14px;border-radius:10px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px">📅 Đổi ngày sử dụng</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="number" id="aff-days" min="1" max="${maxDays||0}" value="${Math.min(maxDays,7)||0}" placeholder="Số ngày" style="width:80px">
-            <span style="font-size:12px;color:var(--text3)" id="aff-days-cost">= ${fmtVND(Math.min(maxDays,7)*ppd)}</span>
-            <button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12px" onclick="redeemDays()" ${s.availableBalance<ppd?'disabled':''}>Đổi</button>
-          </div>
+      <div style="background:var(--card);padding:14px;border-radius:10px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="aff-cash" min="50000" step="10000" value="${Math.max(s.availableBalance,50000)}" placeholder="Số tiền" style="width:140px">
+          <button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12px" onclick="redeemCash()" ${s.availableBalance<50000?'disabled':''}>Yêu cầu rút</button>
         </div>
-        <div style="background:var(--card);padding:14px;border-radius:10px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px">💰 Rút tiền mặt</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="number" id="aff-cash" min="50000" step="10000" value="${Math.min(s.availableBalance,50000)||0}" placeholder="Số tiền" style="width:120px">
-            <button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12px" onclick="redeemCash()" ${s.availableBalance<50000?'disabled':''}>Yêu cầu rút</button>
-          </div>
-          <div style="font-size:11px;color:var(--text3);margin-top:6px">Tối thiểu 50,000₫. Cần admin duyệt.</div>
-        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px">Tối thiểu 50,000₫. Cần admin duyệt. Tiền sẽ được chuyển qua ngân hàng.</div>
       </div>`;
-    const daysInp=document.getElementById('aff-days');
-    if(daysInp)daysInp.addEventListener('input',function(){const dc=document.getElementById('aff-days-cost');if(dc)dc.textContent='= '+fmtVND((parseInt(this.value)||0)*ppd)});
     // Commissions
     const ce=document.getElementById('aff-comms');
     if(ce){_myAffComms=d.commissions||[];_myAffCommsPage=0;_renderMyAffComms()}
     // Redemptions
     const re=document.getElementById('aff-redemptions');
     if(re){
-      if(!d.redemptions.length){re.innerHTML='<div class="muted" style="padding:10px">Chưa có yêu cầu đổi thưởng</div>'}
-      else{re.innerHTML=`<table class="adm-tbl"><thead><tr><th>Loại</th><th>Số tiền</th><th>Ngày thêm</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead><tbody>${d.redemptions.map(r=>{
-        const typeBadge=r.type==='days'?'📅 Ngày':'💰 Tiền';
+      if(!d.redemptions.length){re.innerHTML='<div class="muted" style="padding:10px">Chưa có yêu cầu rút tiền</div>'}
+      else{re.innerHTML=`<table class="adm-tbl"><thead><tr><th>Số tiền</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead><tbody>${d.redemptions.map(r=>{
         const stCls=r.status==='approved'?'color:var(--ok)':r.status==='rejected'?'color:var(--err)':'color:var(--warn)';
-        const stTxt=r.status==='approved'?'✓ Duyệt':r.status==='rejected'?'✕ Từ chối':'⏳ Chờ';
-        return `<tr><td>${typeBadge}</td><td>${fmtVND(r.points_used)}</td><td>${r.days_added?r.days_added+' ngày':'-'}</td><td style="${stCls}">${stTxt}</td><td class="sm">${r.created_at?r.created_at.slice(0,10):'-'}</td></tr>`}).join('')}</tbody></table>`}
+        const stTxt=r.status==='approved'?'✓ Đã duyệt':r.status==='rejected'?'✕ Từ chối':'⏳ Chờ duyệt';
+        return `<tr><td style="font-weight:600">${fmtVND(r.points_used)}</td><td style="${stCls}">${stTxt}</td><td class="sm">${r.created_at?r.created_at.slice(0,10):'-'}</td></tr>`}).join('')}</tbody></table>`}
     }
     // Referrals
     const rf=document.getElementById('aff-referrals');
@@ -3143,15 +3304,6 @@ function _renderMyAffRefs(){
   const start=_myAffRefsPage*_BP;const visible=_myAffRefs.slice(start,start+_BP);
   rf.innerHTML=`<table class="adm-tbl"><thead><tr><th>Email</th><th>Tên</th><th>Gói</th><th>HH kiếm được</th><th>Ngày ĐK</th></tr></thead><tbody>${visible.map(r=>{
     return `<tr><td class="sm">${r.email}</td><td>${r.name||'-'}</td><td><span class="badge">${planName(r.plan)}</span></td><td style="color:var(--ok)">${fmtVND(r.earned)}</td><td class="sm">${r.created_at?r.created_at.slice(0,10):'-'}</td></tr>`}).join('')}</tbody></table>`+_pgHtml(_myAffRefsPage,_myAffRefs.length,'_myAffRefsGoPage');
-}
-
-async function redeemDays(){
-  const days=parseInt(document.getElementById('aff-days')?.value)||0;
-  if(days<1){toast('Nhập số ngày','err');return}
-  const ppd=14286;
-  const amount=days*ppd;
-  if(!confirm(`Đổi ${fmtVND(amount)} → ${days} ngày sử dụng?`))return;
-  try{const d=await API.myAff.redeem({type:'days',amount});toast(d.message,'ok');loadMyAffiliate()}catch(e){toast(e.message,'err')}
 }
 
 async function redeemCash(){

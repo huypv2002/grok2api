@@ -34,6 +34,14 @@ export default {
         return handlePlans(request, env);
       }
 
+      // Public: environment info (for staging banner)
+      if (path === '/api/env' && request.method === 'GET') {
+        return jsonResponse({
+          env: env.IS_STAGING === 'true' ? 'staging' : 'production',
+          api_base: env.GROK_API_BASE,
+        });
+      }
+
       // Public: Get affiliate info by ref code (for welcome popup)
       if (path === '/api/ref-info' && request.method === 'GET') {
         const code = url.searchParams.get('code');

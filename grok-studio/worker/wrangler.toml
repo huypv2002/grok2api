@@ -28,3 +28,36 @@ bucket_name = "grok-studio-media"
 directory = "../frontend"
 binding = "ASSETS"
 not_found_handling = "none"
+
+# ─── Staging environment (dev-grok.liveyt.pro) ───────────────────────────────
+# Deploy: npx wrangler deploy --env staging
+# DB setup: npx wrangler d1 execute grok-studio-db-staging --env staging --file=./schema.sql
+[env.staging]
+name = "grok-studio-staging"
+routes = [
+  { pattern = "dev-grok.liveyt.pro", custom_domain = true }
+]
+
+[env.staging.vars]
+JWT_SECRET = "staging-gkS!9xR#mP2vL@7nQ4wZ8jY0bT5cF3hA"
+GROK_API_BASE = "https://api.liveyt.pro"
+INTERNAL_KEY = "staging-cf-sync-k8X#pQ2mR7vL@9nZ"
+WEB2M_TOKEN = "3c0bdb295f34345a8bf920572d3c15f2d741a48cb8122465ef31f5dae3ad3876"
+ACB_ACCOUNT = "24876591"
+ACB_PASSWORD = "0822@996v"
+ACB_API_TOKEN = "6D5E9F6A-8008-6F14-D8B9-8B98CB9D0FB4"
+IS_STAGING = "true"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "grok-studio-db-staging"
+database_id = "6593472f-1e99-4a9a-b522-f8563b3854e2"
+
+[[env.staging.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "grok-studio-media-staging"
+
+[env.staging.assets]
+directory = "../frontend"
+binding = "ASSETS"
+not_found_handling = "none"

@@ -4,9 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
+    "dev:staging": "wrangler dev --env staging",
     "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
     "db:migrate": "wrangler d1 execute grok-studio-db --local --file=./schema.sql",
-    "db:migrate:prod": "wrangler d1 execute grok-studio-db --file=./schema.sql"
+    "db:migrate:prod": "wrangler d1 execute grok-studio-db --file=./schema.sql",
+    "db:migrate:staging": "wrangler d1 execute grok-studio-db-staging --env staging --file=./schema.sql",
+    "db:create:staging": "wrangler d1 create grok-studio-db-staging",
+    "r2:create:staging": "wrangler r2 bucket create grok-studio-media-staging"
   },
   "devDependencies": {
     "wrangler": "^3.99.0"

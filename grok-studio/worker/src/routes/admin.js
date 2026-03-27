@@ -119,19 +119,33 @@ export async function handleAdmin(request, env, user, path) {
     const type = url.searchParams.get('type');
     const userId = url.searchParams.get('user_id');
     const status = url.searchParams.get('status');
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
     const offset = parseInt(url.searchParams.get('offset') || '0');
 
-    let query = `SELECT h.*, u.email as user_email FROM history h JOIN users u ON h.user_id = u.id WHERE 1=1`;
+    // Chỉ hiển thị 2 ngày gần nhất
+    let where = "WHERE h.created_at >= datetime('now', '-2 days')";
     const params = [];
-    if (type) { query += ' AND h.type = ?'; params.push(type); }
-    if (userId) { query += ' AND h.user_id = ?'; params.push(parseInt(userId)); }
-    if (status) { query += ' AND h.status = ?'; params.push(status); }
-    query += ' ORDER BY h.created_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
+    if (type) { where += ' AND h.type = ?'; params.push(type); }
+    if (userId) { where += ' AND h.user_id = ?'; params.push(parseInt(userId)); }
+    if (status) { where += ' AND h.status = ?'; params.push(status); }
 
-    const rows = await env.DB.prepare(query).bind(...params).all();
-    return jsonResponse({ history: rows.results });
+    const countRow = await env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM history h ${where}`
+    ).bind(...params).first();
+
+    const rows = await env.DB.prepare(
+      `SELECT h.*, u.email as user_email FROM history h JOIN users u ON h.user_id = u.id ${where} ORDER BY h.created_at DESC LIMIT ? OFFSET ?`
+    ).bind(...params, limit, offset).all();
+
+    return jsonResponse({ history: rows.results, total: countRow.cnt, limit, offset });
+  }
+
+  // DELETE /api/admin/history/cleanup — xóa history cũ hơn 2 ngày
+  if (request.method === 'DELETE' && path === '/api/admin/history/cleanup') {
+    const result = await env.DB.prepare(
+      "DELETE FROM history WHERE created_at < datetime('now', '-2 days')"
+    ).run();
+    return jsonResponse({ message: `Đã xóa ${result.meta.changes} bản ghi cũ`, deleted: result.meta.changes });
   }
 
   // PUT /api/admin/history/:id — update a history record (status, output_url)

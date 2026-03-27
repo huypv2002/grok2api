@@ -129,11 +129,13 @@ export async function handleAffiliate(request, env, user, path) {
     });
   }
 
-  // POST /api/affiliate/redeem
+  // POST /api/affiliate/redeem — chỉ rút tiền, không đổi ngày
   if (request.method === 'POST' && path === '/api/affiliate/redeem') {
     const { type, amount } = await request.json();
-    if (!type || !['days', 'cash'].includes(type)) return jsonResponse({ error: 'Loại đổi không hợp lệ' }, 400);
+    // Chỉ cho phép rút tiền
+    if (type !== 'cash') return jsonResponse({ error: 'Chỉ hỗ trợ rút tiền mặt' }, 400);
     if (!amount || amount <= 0) return jsonResponse({ error: 'Số tiền không hợp lệ' }, 400);
+    if (amount < 50000) return jsonResponse({ error: 'Rút tiền tối thiểu 50,000₫' }, 400);
 
     // Check available balance (pending commissions)
     const pending = await env.DB.prepare(
@@ -142,52 +144,12 @@ export async function handleAffiliate(request, env, user, path) {
 
     if (amount > pending.t) return jsonResponse({ error: `Số dư không đủ. Hiện có: ${pending.t.toLocaleString()}₫` }, 400);
 
-    if (type === 'days') {
-      // Convert points to days
-      const days = Math.floor(amount / POINTS_PER_DAY);
-      if (days < 1) return jsonResponse({ error: `Cần tối thiểu ${POINTS_PER_DAY.toLocaleString()}₫ để đổi 1 ngày` }, 400);
-      const actualPoints = days * POINTS_PER_DAY;
+    // Cash withdrawal request — needs admin approval
+    await env.DB.prepare(
+      "INSERT INTO redemptions (affiliate_id, type, amount, points_used, status) VALUES (?, 'cash', ?, ?, 'pending')"
+    ).bind(userId, amount, amount).run();
 
-      // Add days to user's plan
-      const now = new Date();
-      let startDate = now;
-      if (me.plan_expires) {
-        const exp = new Date(me.plan_expires);
-        if (exp > now) startDate = exp;
-      }
-      const newExpires = new Date(startDate.getTime() + days * 86400000).toISOString().slice(0, 10);
-
-      // If user is on free plan, set a default paid plan
-      const newPlan = me.plan === 'free' ? 'week3' : me.plan;
-
-      // Deduct from pending commissions (mark oldest pending as 'paid' until amount covered)
-      await _deductCommissions(env, userId, actualPoints);
-
-      // Update user plan
-      await env.DB.prepare(
-        `UPDATE users SET plan = ?, plan_expires = ?, daily_limit = -1, video_limit = -1, credits = -1, updated_at = datetime('now') WHERE id = ?`
-      ).bind(newPlan, newExpires, userId).run();
-
-      // Record redemption
-      await env.DB.prepare(
-        "INSERT INTO redemptions (affiliate_id, type, amount, points_used, days_added, status, processed_at) VALUES (?, 'days', ?, ?, ?, 'approved', datetime('now'))"
-      ).bind(userId, actualPoints, actualPoints, days).run();
-
-      return jsonResponse({ message: `Đã đổi ${actualPoints.toLocaleString()}₫ → ${days} ngày. Hết hạn: ${newExpires}`, days, new_expires: newExpires });
-    }
-
-    if (type === 'cash') {
-      // Cash withdrawal request — needs admin approval
-      if (amount < 50000) return jsonResponse({ error: 'Rút tiền tối thiểu 50,000₫' }, 400);
-
-      await env.DB.prepare(
-        "INSERT INTO redemptions (affiliate_id, type, amount, points_used, status) VALUES (?, 'cash', ?, ?, 'pending')"
-      ).bind(userId, amount, amount).run();
-
-      return jsonResponse({ message: `Yêu cầu rút ${amount.toLocaleString()}₫ đã được gửi. Chờ admin duyệt.` });
-    }
-
-    return jsonResponse({ error: 'Loại không hợp lệ' }, 400);
+    return jsonResponse({ message: `Yêu cầu rút ${amount.toLocaleString()}₫ đã được gửi. Chờ admin duyệt.` });
   }
 
   return jsonResponse({ error: 'Không tìm thấy' }, 404);

@@ -35,14 +35,16 @@ export async function verifyJWT(request, env) {
       const u = await env.DB.prepare('SELECT role, active_session, tool_session FROM users WHERE id = ?').bind(payload.sub).first();
       if (u) {
         payload.role = u.role;
-        // Multi-device session check: web uses active_session, tool uses tool_session
-        if (payload.sid) {
-          const src = payload.src || 'web';
-          const dbSession = src === 'tool' ? u.tool_session : u.active_session;
+        // Session check: only kick if sid present AND DB session set AND mismatch
+        // Tool sessions are strictly enforced; web sessions are lenient (allow multi-tab/device)
+        if (payload.sid && payload.src === 'tool') {
+          const dbSession = u.tool_session;
           if (dbSession && payload.sid !== dbSession) {
             return { _kicked: true };
           }
         }
+        // Web: only kick if explicitly flagged (active_session mismatch)
+        // Disabled for web to allow multi-tab and avoid false kicks after deploy
       }
     }
     return payload;
