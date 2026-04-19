@@ -3,6 +3,18 @@ title Grok Studio - All Services
 set SCRIPT_DIR=%~dp0
 for %%I in ("%SCRIPT_DIR%..") do set ROOT_DIR=%%~fI
 
+set "PYTHON_CMD="
+if exist "%ROOT_DIR%\.venv\Scripts\python.exe" (
+    set "PYTHON_CMD=%ROOT_DIR%\.venv\Scripts\python.exe"
+) else (
+    where py >nul 2>&1
+    if not errorlevel 1 (
+        set "PYTHON_CMD=py -3.13"
+    ) else (
+        set "PYTHON_CMD=python"
+    )
+)
+
 echo ============================================
 echo   GROK STUDIO - Starting All Services
 echo ============================================
@@ -31,7 +43,7 @@ if not exist "%CF_CFG%" (
     echo.>> "%CF_CFG%"
     echo ingress:>> "%CF_CFG%"
     echo   - hostname: api.liveyt.pro>> "%CF_CFG%"
-    echo     service: http://localhost:8000>> "%CF_CFG%"
+    echo     service: http://127.0.0.1:8000>> "%CF_CFG%"
     echo   - service: http_status:404>> "%CF_CFG%"
     echo   Created.
 ) else (
@@ -40,11 +52,11 @@ if not exist "%CF_CFG%" (
 
 :: 4. Start Cloudflared Named Tunnel
 echo [4/5] Starting Cloudflared Tunnel (api.liveyt.pro)...
-start "Cloudflared" cmd /k "cloudflared tunnel run grok-api"
+start "Cloudflared" cmd /k "cloudflared tunnel --config \"%CF_CFG%\" run grok-api"
 
 :: 5. Start CF auto-refresh service (zendriver)
 echo [5/5] Starting CF auto-refresh (zendriver)...
-start "CF-Refresh" cmd /k "cd /d \"%ROOT_DIR%\" && if exist .venv\Scripts\activate.bat (call .venv\Scripts\activate.bat) else (echo [WARN] .venv\Scripts\activate.bat not found, using system python...) && python \"%SCRIPT_DIR%cf_service_win.py\""
+start "CF-Refresh" cmd /k "cd /d \"%ROOT_DIR%\" && %PYTHON_CMD% \"%SCRIPT_DIR%cf_service_win.py\""
 
 echo.
 echo ============================================
