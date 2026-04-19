@@ -1,5 +1,8 @@
 @echo off
 title Grok Studio - All Services
+set SCRIPT_DIR=%~dp0
+for %%I in ("%SCRIPT_DIR%..") do set ROOT_DIR=%%~fI
+
 echo ============================================
 echo   GROK STUDIO - Starting All Services
 echo ============================================
@@ -7,19 +10,20 @@ echo.
 
 :: 1. Start Grok2API (Granian + auto-restart watchdog)
 echo [1/5] Starting Grok2API (Granian, auto-restart)...
-start "Grok2API" cmd /k "C:\grok-studio\grok2api-watchdog.bat"
+start "Grok2API" cmd /k call "\"%SCRIPT_DIR%grok2api-watchdog.bat\""
 echo   Waiting for Grok2API to start...
 timeout /t 8 /nobreak >nul
 
 :: 2. Configure Grok2API
 echo [2/5] Configuring Grok2API...
-curl -s -X POST http://localhost:8000/v1/admin/config -H "Authorization: Bearer grok2api" -H "Content-Type: application/json" -d "{\"app\":{\"video_format\":\"url\"},\"proxy\":{\"browser\":\"chrome131\"}}" >nul 2>&1
+curl -s -X POST http://localhost:8000/v1/admin/config -H "Authorization: Bearer grok2api" -H "Content-Type: application/json" -d "{\"app\":{\"video_format\":\"url\"},\"proxy\":{\"browser\":\"chrome136\"}}" >nul 2>&1
 echo   OK
 
 :: 3. Ensure cloudflared config exists
 echo [3/5] Checking cloudflared config...
 set CF_DIR=%USERPROFILE%\.cloudflared
 set CF_CFG=%CF_DIR%\config.yml
+if not exist "%CF_DIR%" mkdir "%CF_DIR%"
 if not exist "%CF_CFG%" (
     echo   Config not found, creating %CF_CFG%...
     echo tunnel: grok-api> "%CF_CFG%"
@@ -40,7 +44,7 @@ start "Cloudflared" cmd /k "cloudflared tunnel run grok-api"
 
 :: 5. Start CF auto-refresh service (zendriver)
 echo [5/5] Starting CF auto-refresh (zendriver)...
-start "CF-Refresh" cmd /k "cd /d C:\grok2api && .venv\Scripts\activate && python C:\grok-studio\cf_service_win.py"
+start "CF-Refresh" cmd /k "cd /d \"%ROOT_DIR%\" && if exist .venv\Scripts\activate.bat (call .venv\Scripts\activate.bat) else (echo [WARN] .venv\Scripts\activate.bat not found, using system python...) && python \"%SCRIPT_DIR%cf_service_win.py\""
 
 echo.
 echo ============================================
